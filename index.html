@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>Boom Boom Village</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Mitr:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="game"></div>
+<div id="night"></div>
+
+<!-- หน้าโหลด -->
+<div id="loading">
+  <div class="logo">Boom Boom<br><span>Village</span></div>
+  <div class="tag">หมู่บ้านป่วนเผ่า · ปลูก เลี้ยง สร้าง ช่วยเพื่อน และแกล้งเพื่อน!</div>
+  <div class="bar"><div id="load-bar"></div></div>
+  <button id="start-btn" class="btn gold big hidden">▶ เริ่มเล่น</button>
+  <div class="tiny">คลิกเพื่อเริ่ม (เปิดเสียงด้วยนะ 🔊)</div>
+</div>
+
+<!-- แถบบน -->
+<div id="hud" class="hidden">
+  <div id="prof" title="โปรไฟล์หัวหน้าเผ่า">
+    <div id="lvl">1</div>
+    <div class="pinfo">
+      <div id="pname">หัวหน้าเผ่า</div>
+      <div class="xpbar"><div id="xpfill"></div><span id="xptxt"></span></div>
+    </div>
+  </div>
+  <div id="res">
+    <div class="r" data-k="shells" title="เปลือกหอย (เงินหลัก)"><img data-ic="ic_shell"><b id="r-shells">0</b></div>
+    <div class="r" data-k="amber" title="อำพัน (เงินพิเศษ ใช้เร่งเวลา)"><img data-ic="ic_amber"><b id="r-amber">0</b></div>
+    <div class="r" data-k="feathers" title="ขนนกทอง (ได้จากช่วยเพื่อน/กวาดรอยแกล้ง)"><img data-ic="ic_feather"><b id="r-feathers">0</b></div>
+    <div class="r ev hidden" data-k="coins" title="แพจิ๋ว (เหรียญเทศกาล)"><img data-ic="ic_coin_krathong"><b id="r-coins">0</b></div>
+    <div class="r st" data-k="store" title="ยุ้งฉาง ใช้ไป/ความจุ">🏚️<b id="r-store">0/50</b></div>
+    <div class="r" title="ดาวหมู่บ้าน (คะแนนความสวย)"><img data-ic="ic_star"><b id="r-stars">1</b></div>
+  </div>
+  <div id="place">🏠 หมู่บ้านของฉัน</div>
+</div>
+
+<!-- ภารกิจ -->
+<div id="quest" class="hidden">
+  <div class="qh"><span id="q-ch">บทที่ 1</span><button id="q-toggle" title="ย่อ/ขยาย">–</button></div>
+  <div id="q-body">
+    <div id="q-text"></div>
+    <div class="qbar"><div id="q-fill"></div></div>
+    <div id="q-daily"></div>
+  </div>
+  <div id="chips"></div>
+</div>
+
+<!-- ปุ่มขวา -->
+<div id="side" class="hidden">
+  <button data-p="log" title="บันทึกหมู่บ้าน">📜<span class="badge hidden" id="b-log"></span></button>
+  <button data-p="daily" title="ภารกิจรายวัน">📅<span class="badge hidden" id="b-daily"></span></button>
+  <button data-p="login" title="ของขวัญเข้าเกมรายวัน">🎡<span class="badge hidden" id="b-login">!</span></button>
+  <button data-p="ach" title="ความสำเร็จ">🏆</button>
+  <button data-p="event" id="btn-event" class="hidden" title="เทศกาล">🛶</button>
+  <button data-p="settings" title="ตั้งค่า">⚙️</button>
+  <button data-p="help" title="วิธีเล่น">❓</button>
+</div>
+
+<!-- แถบล่าง -->
+<div id="bottom" class="hidden">
+  <div id="tools">
+    <button data-tool="hand" class="on" title="มือ (1): ใช้งานทุกอย่าง"><i>🖐️</i><span>มือ</span></button>
+    <button data-tool="hoe" title="จอบ (2): ไถดินทำแปลง / ถมแปลงว่าง"><i>⛏️</i><span>จอบ</span></button>
+    <button data-tool="seed" id="seedbtn" title="เมล็ด (3): เลือกเมล็ดที่จะปลูก"><i id="seed-ic">🌱</i><span id="seed-n">ฟักทอง</span></button>
+    <button data-tool="move" title="ย้ายของ (4)"><i>✋</i><span>ย้าย</span></button>
+  </div>
+  <div id="menu">
+    <button data-p="build"><i>🔨</i><span>สร้าง</span></button>
+    <button data-p="market"><i>🛒</i><span>ตลาด</span></button>
+    <button data-p="orders"><i>📋</i><span>คำสั่งซื้อ</span><b class="badge hidden" id="b-orders"></b></button>
+    <button data-p="storage"><i>🏚️</i><span>ยุ้งฉาง</span></button>
+    <button data-p="friends"><i>👥</i><span>เพื่อน</span><b class="badge hidden" id="b-friends"></b></button>
+  </div>
+</div>
+
+<!-- แถบหมู่บ้านเพื่อน -->
+<div id="fbar" class="hidden">
+  <div class="fb-top"><img id="fb-face"><div><b id="fb-name"></b><div id="fb-info"></div></div><button id="fb-home" class="btn">🏠 กลับบ้าน</button></div>
+  <div id="fb-pranks"></div>
+  <div class="fb-row"><button id="fb-gift" class="btn">🎁 รับของขวัญ</button><button id="fb-msg" class="btn">💬 ส่งข้อความ</button></div>
+</div>
+
+<div id="hint"></div>
+<div id="placebar" class="hidden"><span id="pl-text"></span> · <b>R</b> กลับด้าน · <b>Esc</b>/คลิกขวา ยกเลิก <button id="pl-cancel" class="btn sm">ยกเลิก</button></div>
+<div id="toasts"></div>
+<div id="flyer"></div>
+
+<!-- ปุ่มสำหรับมือถือ -->
+<div id="joy" class="hidden"><div id="joy-knob"></div></div>
+<button id="act-btn" class="hidden">✋</button>
+
+<!-- หน้าต่าง -->
+<div id="modal" class="hidden">
+  <div class="box" id="m-box">
+    <button class="close" id="m-close">✕</button>
+    <h2 id="m-title"></h2>
+    <div id="m-body"></div>
+  </div>
+</div>
+
+<!-- บทสนทนา -->
+<div id="talk" class="hidden">
+  <img id="talk-face">
+  <div class="tbox"><b id="talk-name"></b><div id="talk-text"></div><button id="talk-next" class="btn">ต่อไป ▶</button></div>
+</div>
+
+<div id="confetti"></div>
+
+<script src="lib/phaser.min.js"></script>
+<script src="assets.js"></script>
+<script src="js/data.js"></script>
+<script src="js/state.js"></script>
+<script src="js/bots.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/world.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>

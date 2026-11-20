@@ -7,6 +7,9 @@ const TXT = (size = 9, color = '#fff') => ({ fontSize: size + 'px', fontFamily: 
 
 // ---------- ผังหมู่บ้านเพื่อน ----------
 const FRIEND_W = 30, FRIEND_H = 22;
+// สุ่มแบบคงที่ (ตำแหน่งเดิมได้ผลเดิมทุกครั้ง) ใช้วางหญ้า/ดอกไม้/ต้นไม้ตกแต่ง
+function hsh(x, y, s = 0) { let h = (x * 374761393 + y * 668265263 + s * 982451653) | 0; h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; }
+const POOL = (pre) => Object.keys(A.images).filter((k) => k.startsWith(pre)).sort();
 function friendLayout(b) {
   const objs = [
     { type: 'chief', x: 3, y: 4 }, { type: 'hut', x: 22, y: 4 }, { type: 'statue', x: 10, y: 11, id: 'statue' },
@@ -35,12 +38,15 @@ class World extends Phaser.Scene {
     this.home = this.loc === 'home';
     this.bot = this.home ? null : botById(this.loc);
     this.W = this.home ? CFG.MAP_W : FRIEND_W; this.H = this.home ? CFG.MAP_H : FRIEND_H;
-    this.cameras.main.setBackgroundColor('#5f9440').fadeIn(300);
+    this.cameras.main.setBackgroundColor('#3f7a2c').fadeIn(300);
     this.makeAnims();
     this.buildGrid();
     this.tiles = [];
     for (let y = 0; y < this.H; y++) { this.tiles.push([]); for (let x = 0; x < this.W; x++) this.tiles[y].push(this.add.image(x * T, y * T, 'ts_dirt', 0).setOrigin(0).setDepth(0)); }
     for (let y = 0; y < this.H; y++) for (let x = 0; x < this.W; x++) this.paintTile(x, y);
+    this.seed = this.home ? 1 : (this.loc.charCodeAt(0) || 3);
+    this.deco = {}; this.forest = [];
+    for (let y = 0; y < this.H; y++) for (let x = 0; x < this.W; x++) this.scatterAt(x, y);
     this.water = this.add.graphics().setDepth(0.5); this.waterT = 0;
     this.fx = this.add.graphics().setDepth(1);         // ดินชื้น/แตก
     this.landG = this.add.graphics().setDepth(8000);   // พื้นที่ยังไม่ได้ซื้อ
@@ -56,6 +62,8 @@ class World extends Phaser.Scene {
       this.refreshPranks();
       this.spawnVillagers();
     } else this.setupFriend();
+    this.buildForest();
+    this.lookFX();
 
     // ผู้เล่น
     const sp = this.home ? { x: 12.5 * T, y: 9.2 * T } : { x: 1.5 * T, y: 9.2 * T };
@@ -118,20 +126,69 @@ class World extends Phaser.Scene {
     const key = cs.map((t) => (type && t === type ? '1' : '0')).join('');
     this.tiles[y][x].setTexture('ts_' + name, A.wang[name][key]);
   }
-  setCell(x, y, v) { if (!this.cell(x, y)) return; this.grid[y][x] = v; for (let j = y - 1; j <= y + 1; j++) for (let i = x - 1; i <= x + 1; i++) if (this.cell(i, j)) this.paintTile(i, j); }
+  setCell(x, y, v) { if (!this.cell(x, y)) return; this.grid[y][x] = v; for (let j = y - 1; j <= y + 1; j++) for (let i = x - 1; i <= x + 1; i++) if (this.cell(i, j)) this.paintTile(i, j); this.scatterAt(x, y); }
+  // ===== ของตกแต่งธรรมชาติ (ไม่มีผลกับการเล่น) =====
+  scatterAt(x, y) {
+    const k = x + ',' + y; if (this.deco[k]) { this.deco[k].destroy(); delete this.deco[k]; }
+    const c = this.cell(x, y), r = hsh(x, y, this.seed), r2 = hsh(x, y, this.seed + 1);
+    const pick = (pre, v) => { const p = POOL(pre); return p.length ? p[Math.floor(v * p.length) % p.length] : null; };
+    let key = null, ox = 0.2 + hsh(x, y, 3) * 0.6, oy = 0.6 + hsh(x, y, 4) * 0.35;
+    if (c === 'g') {
+      if (r > 0.16) return;
+      key = r2 < 0.42 ? pick('sc_tuft', r2 / 0.42) : r2 < 0.8 ? pick('sc_flower', (r2 - 0.42) / 0.38) : r2 < 0.88 ? pick('sc_stone', (r2 - 0.8) / 0.08) : r2 < 0.93 ? pick('sc_mush', (r2 - 0.88) / 0.05) : pick('sc_leafy', (r2 - 0.93) / 0.07);
+    } else if (c === 'w') {
+      if (this.cell(x, y + 1) === 'g' && r < 0.3) { key = pick('sc_reed', r2); oy = 1.05; }
+      else if (this.cell(x, y + 1) === 'w' && this.cell(x, y - 1) !== 'g' && r < 0.09) { key = pick('sc_lily', r2); oy = 0.8; }
+    }
+    if (!key) return;
+    this.deco[k] = this.add.image((x + ox) * T, (y + oy) * T, key).setOrigin(0.5, 1).setDepth(1.5).setFlipX(hsh(x, y, 5) < 0.5);
+  }
+  forestZone(x, y) {
+    if (this.home) {
+      if (this.owned(x, y)) return false;
+      if (x < S.owned.w && y < S.owned.h + 1) return false;
+      if (this.signCells && this.signCells.some(([sx, sy]) => Math.abs(sx - x) <= 2 && Math.abs(sy - y) <= 1)) return false;
+      return !objAtCell(x, y) && !objAtCell(x, y - 1);
+    }
+    return y >= FRIEND_H - 3;
+  }
+  buildForest() {
+    this.forest.forEach((s) => s.destroy()); this.forest = [];
+    for (let y = 2; y < this.H + 1; y++) for (let x = 0; x < this.W; x++) {
+      if (this.cell(x, Math.min(y, this.H - 1)) !== 'g' || !this.forestZone(x, Math.min(y, this.H - 1))) continue;
+      const r = hsh(x, y, this.seed + 9); if (r > 0.42) continue;
+      const v = hsh(x, y, this.seed + 10);
+      const pre = r < 0.27 ? 'nat_tree' : r < 0.35 ? 'nat_bush' : r < 0.38 ? 'nat_rock' : r < 0.40 ? 'nat_stump' : 'sc_fd';
+      const p = POOL(pre); if (!p.length) continue;
+      let pk = p[Math.floor(v * p.length) % p.length];
+      if (pre === 'nat_tree') { const W = [30, 20, 14, 7, 19, 10]; let acc = 0, t = v * 100; pk = p[0]; for (let i = 0; i < W.length && i < p.length; i++) { acc += W[i]; if (t < acc) { pk = p[i]; break; } } }
+      const px = (x + 0.5 + (hsh(x, y, 11) - 0.5) * 0.6) * T, py = (y + 0.9) * T;
+      const img = this.add.image(px, py, pk).setOrigin(0.5, 1).setDepth(py).setFlipX(hsh(x, y, 12) < 0.5);
+      const sh = this.add.ellipse(px, py - 2, img.width * 0.75, 9, 0x10200a, 0.25).setDepth(2);
+      this.forest.push(img, sh);
+    }
+  }
+  lookFX() {
+    const cam = this.cameras.main;
+    if (!cam.postFX || this.game.renderer.type !== Phaser.WEBGL) return;
+    cam.postFX.clear();
+    const cm = cam.postFX.addColorMatrix(); cm.saturate(0.18); cm.brightness(1.03, true);
+    cam.postFX.addVignette(0.5, 0.5, 0.95, 0.22);
+  }
   owned(x, y) { return !this.home || (x >= 0 && y >= 0 && x < S.owned.w && y < S.owned.h); }
   drawLand() {
     const g = this.landG.clear(); const W = this.W * T, H = this.H * T, ow = S.owned.w * T, oh = S.owned.h * T;
-    g.fillStyle(0x1a1408, 0.42); g.fillRect(ow, 0, W - ow, H); g.fillRect(0, oh, ow, H - oh);
+    g.fillStyle(0x0e1a10, 0.3); g.fillRect(ow, 0, W - ow, H); g.fillRect(0, oh, ow, H - oh);
     g.lineStyle(2, 0xffe08a, 0.55); g.strokeRect(1, 1, ow - 2, oh - 2);
     if (this.signs) this.signs.forEach((s) => s.destroy());
-    this.signs = [];
+    this.signs = []; this.signCells = [];
     const e = nextExpansion();
     if (e) {
       const sx = e.dir === 'east' ? ow + 2 * T : ow / 2, sy = e.dir === 'east' ? oh / 2 + 2 * T : oh + 2 * T;
       const t = this.add.text(sx, sy, '🚩 ขยายที่ดิน\n(คลิก)', TXT(9, '#ffe08a')).setOrigin(0.5).setResolution(4).setDepth(8100).setAlign('center');
       t.setInteractive({ useHandCursor: true }).on('pointerdown', () => { this.uiClick = true; openPanel('expand'); });
-      this.signs.push(t);
+      this.signs.push(t); this.signCells.push([Math.floor(sx / T), Math.floor(sy / T)]);
+      if (this.forest) this.buildForest();
     }
   }
 
@@ -150,8 +207,10 @@ class World extends Phaser.Scene {
       if (img.width > (b.w + 1.2) * T) img.setScale(((b.w + 1.2) * T) / img.width);
       rec.spr = img;
       if (this.home && !this.owned(o.x, o.y)) img.setAlpha(0.75);
+      const shw = Math.min(img.displayWidth * 0.8, (b.w + 0.4) * T);
+      rec.extra.push(this.add.ellipse(cx, by - 3, shw, Math.max(7, Math.min(16, shw * 0.28)), 0x10200a, 0.24).setDepth(2));
       if (o.type === 'campfire' || o.type === 'bonfire' || o.type === 'torch') {
-        const glow = this.add.circle(cx, by - 14, 22, 0xffb040, 0.16).setDepth(by + 1).setBlendMode(Phaser.BlendModes.ADD);
+        const glow = this.add.circle(cx, by - 14, 20, 0xffc060, 0.1).setDepth(by + 1).setBlendMode(Phaser.BlendModes.ADD);
         this.tweens.add({ targets: glow, scale: 1.25, alpha: 0.08, duration: 600 + Math.random() * 300, yoyo: true, repeat: -1 });
         rec.extra.push(glow);
       }
@@ -310,6 +369,7 @@ class World extends Phaser.Scene {
   // ===== รอยแกล้ง =====
   refreshPranks() {
     this.prankSpr.forEach((s) => s.destroy()); this.prankSpr = [];
+    this.ents.forEach((e) => e.kind === 'boar' && e.sh && e.sh.destroy());
     this.ents = this.ents.filter((e) => e.kind !== 'boar');
     const list = this.home ? S.pranksOnMe : (S.bots[this.bot.id].myPranks || []);
     for (const p of list) this.drawPrank(p);
@@ -736,6 +796,8 @@ class World extends Phaser.Scene {
       if (d > 1.5) { e.spr.x += (dx / d) * Math.min(d, sp * dt); e.spr.y += (dy / d) * Math.min(d, sp * dt); if (e.kind !== 'villager' && Math.abs(dx) > 1) e.spr.setFlipX(dx > 0); }
       if (e.kind === 'villager') { const dir = d > 1.5 ? (Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'east' : 'west') : dy > 0 ? 'south' : 'north') : e.dir; e.dir = dir; e.spr.play((d > 1.5 ? 'walk-' : 'idle-') + dir, true); }
       e.spr.setDepth(e.spr.y);
+      if (!e.sh) e.sh = this.add.ellipse(0, 0, Math.min(22, e.spr.displayWidth * 0.7), 5, 0x10200a, 0.25).setDepth(2);
+      e.sh.setPosition(e.spr.x, e.spr.y - 1).setVisible(e.spr.visible);
       if (e.bub) { e.bub.c.x = e.spr.x; e.bub.c.y = e.spr.y - 26 + Math.sin(time / 300) * 2; }
     }
 

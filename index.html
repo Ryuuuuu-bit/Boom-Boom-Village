@@ -5,12 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
 <title>Boom Boom Village</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Mitr:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Mitr:wght@400;500;600;700&family=Itim&display=swap">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 <div id="game"></div>
 <div id="night"></div>
+<div id="vignette"></div>
 
 <!-- หน้าโหลด -->
 <div id="loading">
@@ -35,10 +36,10 @@
     <div class="r" data-k="amber" title="อำพัน (เงินพิเศษ ใช้เร่งเวลา)"><img data-ic="ic_amber"><b id="r-amber">0</b></div>
     <div class="r" data-k="feathers" title="ขนนกทอง (ได้จากช่วยเพื่อน/กวาดรอยแกล้ง)"><img data-ic="ic_feather"><b id="r-feathers">0</b></div>
     <div class="r ev hidden" data-k="coins" title="แพจิ๋ว (เหรียญเทศกาล)"><img data-ic="ic_coin_krathong"><b id="r-coins">0</b></div>
-    <div class="r st" data-k="store" title="ยุ้งฉาง ใช้ไป/ความจุ">🏚️<b id="r-store">0/50</b></div>
+    <div class="r st" data-k="store" title="ยุ้งฉาง ใช้ไป/ความจุ"><img data-ic="ui_storage"><b id="r-store">0/50</b></div>
     <div class="r" title="ดาวหมู่บ้าน (คะแนนความสวย)"><img data-ic="ic_star"><b id="r-stars">1</b></div>
   </div>
-  <div id="place">🏠 หมู่บ้านของฉัน</div>
+  <div id="place"><img data-ic="ui_home"><span id="place-t">หมู่บ้านของฉัน</span></div>
 </div>
 
 <!-- ภารกิจ -->
@@ -54,37 +55,37 @@
 
 <!-- ปุ่มขวา -->
 <div id="side" class="hidden">
-  <button data-p="log" title="บันทึกหมู่บ้าน">📜<span class="badge hidden" id="b-log"></span></button>
-  <button data-p="daily" title="ภารกิจรายวัน">📅<span class="badge hidden" id="b-daily"></span></button>
-  <button data-p="login" title="ของขวัญเข้าเกมรายวัน">🎡<span class="badge hidden" id="b-login">!</span></button>
-  <button data-p="ach" title="ความสำเร็จ">🏆</button>
-  <button data-p="event" id="btn-event" class="hidden" title="เทศกาล">🛶</button>
-  <button data-p="settings" title="ตั้งค่า">⚙️</button>
-  <button data-p="help" title="วิธีเล่น">❓</button>
+  <button data-p="log" title="บันทึกหมู่บ้าน"><img data-ic="ui_log"><span class="badge hidden" id="b-log"></span></button>
+  <button data-p="daily" title="ภารกิจรายวัน"><img data-ic="ui_daily"><span class="badge hidden" id="b-daily"></span></button>
+  <button data-p="login" title="ของขวัญเข้าเกมรายวัน"><img data-ic="ui_gift"><span class="badge hidden" id="b-login">!</span></button>
+  <button data-p="ach" title="ความสำเร็จ"><img data-ic="ui_trophy"></button>
+  <button data-p="event" id="btn-event" class="hidden" title="เทศกาล"><img data-ic="ui_raft"></button>
+  <button data-p="settings" title="ตั้งค่า"><img data-ic="ui_gear"></button>
+  <button data-p="help" title="วิธีเล่น"><img data-ic="ui_help"></button>
 </div>
 
 <!-- แถบล่าง -->
 <div id="bottom" class="hidden">
   <div id="tools">
-    <button data-tool="hand" class="on" title="มือ (1): ใช้งานทุกอย่าง"><i>🖐️</i><span>มือ</span></button>
-    <button data-tool="hoe" title="จอบ (2): ไถดินทำแปลง / ถมแปลงว่าง"><i>⛏️</i><span>จอบ</span></button>
-    <button data-tool="seed" id="seedbtn" title="เมล็ด (3): เลือกเมล็ดที่จะปลูก"><i id="seed-ic">🌱</i><span id="seed-n">ฟักทอง</span></button>
-    <button data-tool="move" title="ย้ายของ (4)"><i>✋</i><span>ย้าย</span></button>
+    <button data-tool="hand" class="on" title="มือ (1): ใช้งานทุกอย่าง"><i><img data-ic="ui_hand"></i><span>มือ</span></button>
+    <button data-tool="hoe" title="จอบ (2): ไถดินทำแปลง / ถมแปลงว่าง"><i><img data-ic="ui_hoe"></i><span>จอบ</span></button>
+    <button data-tool="seed" id="seedbtn" title="เมล็ด (3): เลือกเมล็ดที่จะปลูก"><i id="seed-ic"><img data-ic="ui_seed"></i><span id="seed-n">ฟักทอง</span></button>
+    <button data-tool="move" title="ย้ายของ (4)"><i><img data-ic="ui_move"></i><span>ย้าย</span></button>
   </div>
   <div id="menu">
-    <button data-p="build"><i>🔨</i><span>สร้าง</span></button>
-    <button data-p="market"><i>🛒</i><span>ตลาด</span></button>
-    <button data-p="orders"><i>📋</i><span>คำสั่งซื้อ</span><b class="badge hidden" id="b-orders"></b></button>
-    <button data-p="storage"><i>🏚️</i><span>ยุ้งฉาง</span></button>
-    <button data-p="friends"><i>👥</i><span>เพื่อน</span><b class="badge hidden" id="b-friends"></b></button>
+    <button data-p="build"><i><img data-ic="ui_build"></i><span>สร้าง</span></button>
+    <button data-p="market"><i><img data-ic="ui_market"></i><span>ตลาด</span></button>
+    <button data-p="orders"><i><img data-ic="ui_orders"></i><span>คำสั่งซื้อ</span><b class="badge hidden" id="b-orders"></b></button>
+    <button data-p="storage"><i><img data-ic="ui_storage"></i><span>ยุ้งฉาง</span></button>
+    <button data-p="friends"><i><img data-ic="ui_friends"></i><span>เพื่อน</span><b class="badge hidden" id="b-friends"></b></button>
   </div>
 </div>
 
 <!-- แถบหมู่บ้านเพื่อน -->
 <div id="fbar" class="hidden">
-  <div class="fb-top"><img id="fb-face"><div><b id="fb-name"></b><div id="fb-info"></div></div><button id="fb-home" class="btn">🏠 กลับบ้าน</button></div>
+  <div class="fb-top"><img id="fb-face"><div><b id="fb-name"></b><div id="fb-info"></div></div><button id="fb-home" class="btn"><img data-ic="ui_home" class="bi"> กลับบ้าน</button></div>
   <div id="fb-pranks"></div>
-  <div class="fb-row"><button id="fb-gift" class="btn">🎁 รับของขวัญ</button><button id="fb-msg" class="btn">💬 ส่งข้อความ</button></div>
+  <div class="fb-row"><button id="fb-gift" class="btn gold"><img data-ic="ui_gift" class="bi"> รับของขวัญ</button><button id="fb-msg" class="btn"><img data-ic="ui_msg" class="bi"> ส่งข้อความ</button></div>
 </div>
 
 <div id="hint"></div>
@@ -99,8 +100,8 @@
 <!-- หน้าต่าง -->
 <div id="modal" class="hidden">
   <div class="box" id="m-box">
-    <button class="close" id="m-close">✕</button>
-    <h2 id="m-title"></h2>
+    <button class="close" id="m-close"><img data-ic="ui_close"></button>
+    <div class="m-head"><img id="m-ic" class="hidden"><h2 id="m-title"></h2></div>
     <div id="m-body"></div>
   </div>
 </div>

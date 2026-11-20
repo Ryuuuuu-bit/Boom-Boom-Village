@@ -80,7 +80,7 @@ function hud() {
 function badge(id, v) { const el = $(id); if (!el) return; el.classList.toggle('hidden', !v); el.textContent = v || ''; }
 function hudPlace() {
   const home = !SCENE || SCENE.home;
-  $('place').textContent = home ? '🏠 หมู่บ้านของฉัน' : `🏡 หมู่บ้าน${SCENE.bot.n}`;
+  $('place-t').textContent = home ? 'หมู่บ้านของฉัน' : `หมู่บ้าน${SCENE.bot.n}`;
   $('bottom').classList.toggle('hidden', !home); $('fbar').classList.toggle('hidden', home);
   $('quest').classList.toggle('hidden', false);
 }
@@ -108,7 +108,9 @@ function renderPanel(first) {
   const r = PANELS[PANEL.name](PANEL.arg, PANEL);
   if (!r) { closePanel(); return; }
   const body = $('m-body'); const sc = $('m-box').scrollTop;
-  $('m-title').innerHTML = r.title; body.innerHTML = r.html; PANEL.acts = r.acts || {}; PANEL.live = r.live; PANEL.onClose = r.onClose;
+  const pic = PANEL_IC[PANEL.name]; const mic = $('m-ic');
+  if (pic && A.images[pic]) { mic.src = A.images[pic]; mic.classList.remove('hidden'); } else mic.classList.add('hidden');
+  $('m-title').innerHTML = pic ? String(r.title).replace(/^[\p{Extended_Pictographic}\uFE0F\u200D\s]+/u, '') : r.title; body.innerHTML = r.html; PANEL.acts = r.acts || {}; PANEL.live = r.live; PANEL.onClose = r.onClose;
   $('m-box').classList.toggle('narrow', !!r.narrow);
   $('modal').classList.remove('hidden');
   if (!first) $('m-box').scrollTop = sc;
@@ -116,6 +118,7 @@ function renderPanel(first) {
 function tabsHTML(list, cur) { return `<div class="tabs">${list.map(([k, n]) => `<button data-tab="${k}" class="${k === cur ? 'on' : ''}">${n}</button>`).join('')}</div>`; }
 
 const PANELS = {};
+const PANEL_IC = { build: 'ui_build', market: 'ui_market', orders: 'ui_orders', storage: 'ui_storage', friends: 'ui_friends', log: 'ui_log', daily: 'ui_daily', login: 'ui_gift', ach: 'ui_trophy', event: 'ui_raft', settings: 'ui_gear', help: 'ui_help', expand: 'ui_flag', chief: 'ui_crown', bonfire: 'ui_fire', hut: 'ui_home', seeds: 'ui_seed' };
 // --- สร้าง ---
 PANELS.build = (arg, P) => {
   const tab = P.tab || 'building';

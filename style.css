@@ -23,6 +23,10 @@ img.bi { width: 20px; height: 20px; vertical-align: -5px; margin: -4px 0; }
 #vignette { position: fixed; inset: 0; pointer-events: none; z-index: 2;
   background: radial-gradient(ellipse at 50% 45%, transparent 55%, rgba(10, 24, 6, .38) 100%),
               linear-gradient(180deg, rgba(255, 236, 170, .07), transparent 35%); }
+#vignette::after { content: ''; position: absolute; inset: -20%; mix-blend-mode: soft-light; opacity: .55;
+  background: repeating-linear-gradient(115deg, rgba(255, 244, 200, 0) 0 140px, rgba(255, 244, 200, .35) 190px, rgba(255, 244, 200, 0) 260px 420px);
+  animation: rays 18s ease-in-out infinite alternate; }
+@keyframes rays { from { transform: translateX(-60px); opacity: .35; } to { transform: translateX(60px); opacity: .6; } }
 
 /* ---------- ปุ่มแบบลูกกวาด ---------- */
 .btn { --c1: #d99a5c; --c2: #a8652f; --bd: var(--line);

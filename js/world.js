@@ -64,6 +64,7 @@ class World extends Phaser.Scene {
     } else this.setupFriend();
     this.buildForest();
     this.lookFX();
+    this.ambience();
 
     // ผู้เล่น
     const sp = this.home ? { x: 12.5 * T, y: 9.2 * T } : { x: 1.5 * T, y: 9.2 * T };
@@ -135,13 +136,16 @@ class World extends Phaser.Scene {
     let key = null, ox = 0.2 + hsh(x, y, 3) * 0.6, oy = 0.6 + hsh(x, y, 4) * 0.35;
     if (c === 'g') {
       if (r > 0.16) return;
+      if (this.home && (objAtCell(x, y) || objAtCell(x, y + 1) || objAtCell(x, y + 2))) return;
       key = r2 < 0.42 ? pick('sc_tuft', r2 / 0.42) : r2 < 0.8 ? pick('sc_flower', (r2 - 0.42) / 0.38) : r2 < 0.88 ? pick('sc_stone', (r2 - 0.8) / 0.08) : r2 < 0.93 ? pick('sc_mush', (r2 - 0.88) / 0.05) : pick('sc_leafy', (r2 - 0.93) / 0.07);
     } else if (c === 'w') {
       if (this.cell(x, y + 1) === 'g' && r < 0.3) { key = pick('sc_reed', r2); oy = 1.05; }
       else if (this.cell(x, y + 1) === 'w' && this.cell(x, y - 1) !== 'g' && r < 0.09) { key = pick('sc_lily', r2); oy = 0.8; }
     }
     if (!key) return;
-    this.deco[k] = this.add.image((x + ox) * T, (y + oy) * T, key).setOrigin(0.5, 1).setDepth(1.5).setFlipX(hsh(x, y, 5) < 0.5);
+    const img = this.deco[k] = this.add.image((x + ox) * T, (y + oy) * T, key).setOrigin(0.5, 1).setDepth(1.5).setFlipX(hsh(x, y, 5) < 0.5);
+    if (/tuft|flower|reed|leafy/.test(key)) this.sway(img, 3 + hsh(x, y, 6) * 3, 1300 + hsh(x, y, 7) * 1200);
+    else if (/lily/.test(key)) this.tweens.add({ targets: img, y: img.y + 1.5, duration: 1600 + hsh(x, y, 7) * 900, yoyo: true, repeat: -1, ease: 'Sine.inOut', delay: hsh(x, y, 8) * 1500 });
   }
   forestZone(x, y) {
     if (this.home) {
@@ -165,8 +169,88 @@ class World extends Phaser.Scene {
       const px = (x + 0.5 + (hsh(x, y, 11) - 0.5) * 0.6) * T, py = (y + 0.9) * T;
       const img = this.add.image(px, py, pk).setOrigin(0.5, 1).setDepth(py).setFlipX(hsh(x, y, 12) < 0.5);
       const sh = this.add.ellipse(px, py - 2, img.width * 0.75, 9, 0x10200a, 0.25).setDepth(2);
+      if (/tree|bush|palm|fd/.test(pk)) this.sway(img, /tree|palm/.test(pk) ? 1.2 + hsh(x, y, 13) : 2, 2200 + hsh(x, y, 14) * 1600);
       this.forest.push(img, sh);
     }
+  }
+  // โยกตามลม (หมุนรอบโคน)
+  sway(img, deg, dur) {
+    img.setAngle(-deg * 0.5);
+    this.tweens.add({ targets: img, angle: deg * 0.5, duration: dur, yoyo: true, repeat: -1, ease: 'Sine.inOut', delay: Math.random() * dur });
+  }
+  // พื้นผิวนุ่ม, น้ำไหล, เงาเมฆ, ละอองแสง, ผีเสื้อ
+  makeTex() {
+    const tx = this.textures;
+    const canvasTex = (key, w, h, draw) => { if (tx.exists(key)) return; const c = tx.createCanvas(key, w, h); draw(c.getContext(), w, h); c.refresh(); };
+    canvasTex('soft', 128, 128, (g, w) => { const gr = g.createRadialGradient(w / 2, w / 2, 0, w / 2, w / 2, w / 2); gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.55, 'rgba(255,255,255,.45)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = gr; g.fillRect(0, 0, w, w); });
+    canvasTex('mote', 8, 8, (g) => { const gr = g.createRadialGradient(4, 4, 0, 4, 4, 4); gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = gr; g.fillRect(0, 0, 8, 8); });
+    canvasTex('ripple', 64, 64, (g) => {
+      g.strokeStyle = 'rgba(255,255,255,.55)'; g.lineWidth = 1;
+      for (let i = 0; i < 7; i++) { const y = 4 + i * 9 + (i % 2) * 3, x0 = (i * 23) % 64, len = 8 + (i * 7) % 12; g.beginPath(); for (let k = 0; k <= len; k++) g.lineTo((x0 + k) % 64, y + Math.round(Math.sin(k / 2.5) * 1)); g.stroke(); }
+    });
+    canvasTex('glint', 4, 1, (g) => { g.fillStyle = '#ffffff'; g.fillRect(0, 0, 4, 1); });
+    canvasTex('bfly', 14, 7, (g) => {
+      const wing = (ox, col) => { g.fillStyle = col; g.fillRect(ox + 0, 1, 3, 3); g.fillRect(ox + 3, 0, 3, 3); g.fillRect(ox + 1, 4, 2, 2); g.fillStyle = '#3a2214'; g.fillRect(ox + 6, 1, 1, 5); };
+      wing(0, '#ffd23f'); g.fillStyle = '#ffd23f'; g.fillRect(8, 1, 3, 3); g.fillRect(7, 0, 3, 3); g.fillRect(10, 4, 2, 2);
+    });
+    canvasTex('smoke', 16, 16, (g) => { const gr = g.createRadialGradient(8, 8, 0, 8, 8, 8); gr.addColorStop(0, 'rgba(235,230,220,.9)'); gr.addColorStop(1, 'rgba(235,230,220,0)'); g.fillStyle = gr; g.fillRect(0, 0, 16, 16); });
+  }
+  ambience() {
+    this.makeTex();
+    const W = this.W * T, H = this.H * T;
+    // 1) แสงเงาบนพื้นให้ดูนุ่ม ไม่เป็นตาราง
+    const n = Math.round((this.W * this.H) / 22);
+    for (let i = 0; i < n; i++) {
+      const x = hsh(i, 1, this.seed + 20) * W, y = hsh(i, 2, this.seed + 20) * H, light = hsh(i, 3, this.seed + 20) < 0.55;
+      this.add.image(x, y, 'soft').setDepth(0.6).setScale(0.9 + hsh(i, 4, this.seed + 20) * 1.6, 0.6 + hsh(i, 5, this.seed + 20) * 1.0)
+        .setTint(light ? 0xfff0a0 : 0x0f3a08).setAlpha(light ? 0.13 : 0.16);
+    }
+    // 2) น้ำ: ลายคลื่นเลื่อนช้า ๆ บนช่องน้ำที่ล้อมด้วยน้ำ
+    this.waves = [];
+    for (let y = 0; y < this.H; y++) for (let x = 0; x < this.W; x++) {
+      if (this.cell(x, y) !== 'w') continue;
+      let inner = true; for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) { const c = this.cell(x + i, y + j); if (c && c !== 'w') inner = false; }
+      if (!inner) continue;
+      this.waves.push(this.add.tileSprite(x * T, y * T, T, T, 'ripple').setOrigin(0).setDepth(0.55).setAlpha(0.35).setTilePosition(x * T, y * T));
+    }
+    this.waveT = 0;
+    // 3) เงาเมฆ
+    this.clouds = [];
+    for (let i = 0; i < 4; i++) {
+      const c = this.add.image(Math.random() * W, Math.random() * H, 'soft').setDepth(9050).setTint(0x0a1a2a).setAlpha(0.12).setScale(5 + Math.random() * 3, 3 + Math.random() * 1.5);
+      c.vx = 7 + Math.random() * 5; this.clouds.push(c);
+    }
+    // 4) ละอองแสงลอยในอากาศ
+    this.moteZone = new Phaser.Geom.Rectangle(0, 0, 10, 10);
+    this.motes = this.add.particles(0, 0, 'mote', {
+      emitZone: { type: 'random', source: this.moteZone }, lifespan: { min: 4000, max: 7000 }, frequency: 220, quantity: 1,
+      speedX: { min: -6, max: 6 }, speedY: { min: -14, max: -4 }, scale: { min: 0.25, max: 0.6 },
+      alpha: { values: [0, 0.85, 0.85, 0] }, tint: [0xfff3b0, 0xffffff, 0xd8ffb0], blendMode: 'ADD',
+    }).setDepth(9060);
+    // 5) ผีเสื้อ
+    if (this.home || true) {
+      this.bflies = [];
+      const ow = (this.home ? S.owned.w : this.W) * T, oh = (this.home ? S.owned.h : this.H) * T;
+      const cols = [0xffffff, 0xffb3e0, 0x9fd8ff, 0xffffff, 0xc8f59a];
+      for (let i = 0; i < 5; i++) {
+        const b = this.add.image(Math.random() * ow, 3 * T + Math.random() * (oh - 4 * T), 'bfly').setDepth(9040).setScale(0.9).setTint(cols[i]);
+        this.tweens.add({ targets: b, scaleX: 0.25, duration: 110 + Math.random() * 40, yoyo: true, repeat: -1 });
+        b.home = { w: ow, h: oh }; this.bflies.push(b); this.bflyMove(b);
+      }
+    }
+  }
+  bflyMove(b) {
+    const tx = Phaser.Math.Clamp(b.x + rnd(-90, 90), 8, b.home.w - 8), ty = Phaser.Math.Clamp(b.y + rnd(-60, 60), 2.5 * T, b.home.h - 8);
+    this.tweens.add({ targets: b, x: tx, y: ty, duration: rnd(1800, 3600), ease: 'Sine.inOut', onComplete: () => b.active && this.bflyMove(b) });
+    this.tweens.add({ targets: b, angle: { from: -10, to: 10 }, duration: 500, yoyo: true, repeat: 2, ease: 'Sine.inOut' });
+  }
+  fireFX(x, y, big) {
+    this.makeTex();
+    const smoke = this.add.particles(x, y - 6, 'smoke', { lifespan: big ? 2600 : 1800, frequency: big ? 160 : 260, speedY: { min: -22, max: -12 }, speedX: { min: -4, max: 6 },
+      scale: { start: 0.4, end: big ? 1.8 : 1.2 }, alpha: { start: 0.45, end: 0 } }).setDepth(9020);
+    const sparks = this.add.particles(x, y - 4, 'mote', { lifespan: 900, frequency: big ? 120 : 220, speedY: { min: -40, max: -18 }, speedX: { min: -10, max: 10 },
+      scale: { start: 0.45, end: 0 }, tint: [0xffd060, 0xff8a30, 0xfff0a0], blendMode: 'ADD' }).setDepth(9021);
+    return [smoke, sparks];
   }
   lookFX() {
     const cam = this.cameras.main;
@@ -212,7 +296,7 @@ class World extends Phaser.Scene {
       if (o.type === 'campfire' || o.type === 'bonfire' || o.type === 'torch') {
         const glow = this.add.circle(cx, by - 14, 20, 0xffc060, 0.1).setDepth(by + 1).setBlendMode(Phaser.BlendModes.ADD);
         this.tweens.add({ targets: glow, scale: 1.25, alpha: 0.08, duration: 600 + Math.random() * 300, yoyo: true, repeat: -1 });
-        rec.extra.push(glow);
+        rec.extra.push(glow, ...this.fireFX(cx, by - (o.type === 'torch' ? 44 : 10), o.type === 'bonfire'));
       }
       if (o.type === 'bonfire') { const t = this.add.text(cx, by - 30, 'กองไฟกลางเผ่า', TXT(7, '#ffd27a')).setOrigin(0.5, 1).setResolution(4).setDepth(9000).setAlpha(0.85); rec.extra.push(t); }
     }
@@ -811,13 +895,23 @@ class World extends Phaser.Scene {
       }
     }
 
-    // น้ำระยิบระยับ
+    // น้ำ: ลายคลื่นไหล + ประกายแสงค่อย ๆ ลอยผ่าน
+    const cam = this.cameras.main.worldView;
+    this.waveT += dt;
+    if (this.waves) { const ox = this.waveT * 6, oy = Math.sin(this.waveT * 0.8) * 3; for (const w of this.waves) w.setTilePosition(w.x + ox, w.y + oy); }
     this.waterT += dt;
-    if (this.waterT > 0.25) {
-      this.waterT = 0; const g = this.water.clear(); g.fillStyle(0xffffff, 0.35);
-      const cam = this.cameras.main.worldView;
-      for (let i = 0; i < 10; i++) { const x = rnd(cam.x, cam.right), y = rnd(2, 2 * T - 4); if (this.cell(Math.floor(x / T), Math.floor(y / T)) === 'w') g.fillRect(Math.floor(x), Math.floor(y), 3, 1); }
+    if (this.waterT > 0.12) {
+      this.waterT = 0;
+      for (let i = 0; i < 3; i++) {
+        const x = rnd(cam.x, cam.right), y = rnd(cam.y, cam.bottom), cx = Math.floor(x / T), cy = Math.floor(y / T);
+        if (this.cell(cx, cy) !== 'w' || this.cell(cx, cy + 1) === 'g' || this.cell(cx, cy - 1) === 'g') continue;
+        const gl = this.add.image(Math.floor(x), Math.floor(y), 'glint').setDepth(0.7).setAlpha(0).setScale(rnd(1, 2), 1);
+        this.tweens.add({ targets: gl, alpha: { from: 0, to: 0.8 }, x: gl.x + rnd(4, 10), duration: rnd(500, 800), yoyo: true, ease: 'Sine.inOut', onComplete: () => gl.destroy() });
+      }
     }
+    // เงาเมฆลอยผ่าน + ละอองแสงตามกล้อง
+    if (this.clouds) { const W = this.W * T; for (const c of this.clouds) { c.x += c.vx * dt; if (c.x - c.displayWidth / 2 > W) { c.x = -c.displayWidth / 2; c.y = Math.random() * this.H * T; } } }
+    if (this.moteZone) this.moteZone.setTo(cam.x, cam.y, cam.width, cam.height);
 
     this.refreshAcc += dtMs;
     if (this.refreshAcc > 400) { this.refreshAcc = 0; if (this.home) { this.refreshPlots(); this.animalBubbles(); this.objBubbles(); } setHint(this.hintText()); }

@@ -27,7 +27,7 @@ http.createServer((req, res) => {
     res.writeHead(200, {
       'Content-Type': TYPES[ext] || 'application/octet-stream',
       'Content-Length': st.size,
-      'Cache-Control': ext === '.html' ? 'no-cache' : 'public, max-age=3600',
+      'Cache-Control': ['.html', '.js', '.css'].includes(ext) ? 'no-cache' : 'public, max-age=3600',
     });
     fs.createReadStream(file).pipe(res);
   });

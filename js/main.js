@@ -12,7 +12,7 @@ BUS.on('quests', () => hud());
 BUS.on('log', () => hud());
 BUS.on('toast', (m, c) => toast(m, c));
 BUS.on('float', (m) => { if (SCENE) SCENE.floatText(SCENE.player.x, SCENE.player.y - 40, m.replace(/<[^>]+>/g, '🛶')); });
-BUS.on('levelup', (lv, u) => { pendingLevel.push([lv, u]); setTimeout(flushLevel, 300); });
+BUS.on('levelup', (lv, u) => { lvBurst(lv); pendingLevel.push([lv, u]); setTimeout(flushLevel, 1400); });
 BUS.on('chapter', (name) => { toast(`📖 จบ${name}! เก่งมาก`, 'good'); confetti(60); setTimeout(() => { const t = CHAPTER_TALK[S.story.ch]; if (t) talk(t); }, 900); });
 BUS.on('pranks', () => { if (SCENE && SCENE.home) SCENE.refreshPranks(); hud(); });
 BUS.on('botvisit', (id, kind) => { if (SCENE) SCENE.botVisit(id, kind); });

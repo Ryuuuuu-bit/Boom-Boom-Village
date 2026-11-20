@@ -29,6 +29,43 @@ function flyToHud(sx, sy, iconKey) {
   requestAnimationFrame(() => requestAnimationFrame(() => { img.style.left = tgt.left + 'px'; img.style.top = tgt.top + 'px'; img.style.opacity = '0.2'; }));
   setTimeout(() => { img.remove(); bumpRes('store'); }, 720);
 }
+// ----- juice: เหรียญพุ่งจากตัวละครเข้าแถบเงิน + ตัวเลขวิ่งขึ้น -----
+const RES_IC = { shells: 'ic_shell', amber: 'ic_amber', feathers: 'ic_feather', coins: 'ic_coin_krathong' };
+const COUNT = {};
+function worldToScreen(x, y) { const c = SCENE.cameras.main; return [(x - c.worldView.x) * c.zoom, (y - c.worldView.y) * c.zoom]; }
+function burstFrom() { return SCENE && SCENE.player && SCENE.cameras ? worldToScreen(SCENE.player.x, SCENE.player.y - 30) : [innerWidth / 2, innerHeight / 2]; }
+function flyIcons(icon, target, n, onEach) {
+  if (!target || !A.images[icon]) return;
+  const t = target.getBoundingClientRect(), [sx, sy] = burstFrom(), tx = t.left + t.width / 2 - 15, ty = t.top + t.height / 2 - 15;
+  for (let i = 0; i < n; i++) {
+    const img = document.createElement('img'); img.className = 'coinfly'; img.src = A.images[icon]; img.style.left = '0'; img.style.top = '0'; img.style.opacity = '0'; document.body.appendChild(img);
+    const ox = sx + rnd(-46, 46), oy = sy + rnd(-44, 6);
+    const an = img.animate([
+      { transform: `translate(${sx - 15}px,${sy - 15}px) scale(.3)`, opacity: 0 },
+      { transform: `translate(${ox - 15}px,${oy - 15}px) scale(1.15)`, opacity: 1, offset: 0.28 },
+      { transform: `translate(${ox - 15}px,${oy - 9}px) scale(1)`, opacity: 1, offset: 0.4 },
+      { transform: `translate(${tx}px,${ty}px) scale(.75)`, opacity: 1 }], { duration: 820, delay: i * 55, easing: 'cubic-bezier(.45,0,.55,1)', fill: 'forwards' });
+    an.onfinish = () => { img.remove(); onEach && onEach(i); };
+  }
+}
+function coinBurst(k, delta) {
+  const tgt = document.querySelector(`#res .r[data-k="${k}"] img`); if (!tgt || !RES_IC[k] || $('hud').classList.contains('hidden')) return;
+  const n = Math.min(9, Math.max(2, Math.round(Math.log2(delta + 1) * 1.6)));
+  flyIcons(RES_IC[k], tgt, n, (i) => { bumpRes(k); if (i % 2 === 0) sfx('coin', 0.35); });
+}
+function countTo(k, from, to) {
+  const el = $('r-' + k); if (!el) return;
+  const cur = COUNT[k] ? COUNT[k].shown : from; const st = { from: cur, to, shown: cur, t0: performance.now() + 450 }; COUNT[k] = st;
+  const step = (now) => {
+    if (COUNT[k] !== st) return;
+    const p = Math.min(1, Math.max(0, (now - st.t0) / 650)), e = 1 - Math.pow(1 - p, 3);
+    st.shown = Math.round(st.from + (st.to - st.from) * e); el.textContent = fmtNum(st.shown);
+    if (p < 1) requestAnimationFrame(step); else { delete COUNT[k]; el.textContent = fmtNum(lastRes[k]); }
+  };
+  requestAnimationFrame(step);
+}
+function xpSpark() { flyIcons('ic_star', $('lvl'), 3, () => { const l = $('lvl'); l.classList.remove('bump'); void l.offsetWidth; l.classList.add('bump'); }); }
+function lvBurst(lv) { const d = document.createElement('div'); d.className = 'lvup-burst'; d.innerHTML = `<div>เลเวล ${lv}!</div>`; document.body.appendChild(d); setTimeout(() => d.remove(), 1700); confetti(90); }
 function bumpRes(k) { const el = document.querySelector(`#res .r[data-k="${k}"]`); if (!el) return; el.classList.remove('bump'); void el.offsetWidth; el.classList.add('bump'); }
 function setHint(t) { if ($('hint').textContent !== t) $('hint').textContent = t || ''; }
 function placeBar(on, name, move) { $('placebar').classList.toggle('hidden', !on); if (on) $('pl-text').innerHTML = (move ? '✋ ย้าย' : '🔨 วาง') + ` <b>${name}</b>: คลิกที่หญ้าว่าง (กรอบสีเขียว)`; }
@@ -46,7 +83,14 @@ function hud() {
   const need = XP_NEED(S.level); $('xpfill').style.width = Math.min(100, (S.xp / need) * 100) + '%';
   $('xptxt').textContent = S.level >= maxLevel() ? 'เลเวลสูงสุดของยุค' : `${S.xp}/${need} XP`;
   const vals = { shells: S.shells, amber: S.amber, feathers: S.feathers, coins: S.event.coins };
-  for (const [k, v] of Object.entries(vals)) { $('r-' + k).textContent = fmtNum(v); if (lastRes[k] !== undefined && v > lastRes[k]) bumpRes(k); lastRes[k] = v; }
+  for (const [k, v] of Object.entries(vals)) {
+    if (lastRes[k] !== undefined && v > lastRes[k]) { coinBurst(k, v - lastRes[k]); countTo(k, lastRes[k], v); }
+    else if (!COUNT[k]) $('r-' + k).textContent = fmtNum(v);
+    else COUNT[k].to = v;
+    lastRes[k] = v;
+  }
+  if (lastRes.xp !== undefined && (S.xp > lastRes.xp || S.level > lastRes.lv)) xpSpark();
+  lastRes.xp = S.xp; lastRes.lv = S.level;
   $('r-store').textContent = storageUsed() + '/' + storageCap();
   $('r-store').style.color = storageFree() <= 5 ? '#ff9a7a' : '';
   $('r-stars').textContent = '★'.repeat(villageStars());
@@ -59,10 +103,10 @@ function hud() {
   $('q-daily').innerHTML = '<b>📅 วันนี้</b>' + S.daily.quests.map((q) => `<div class="${q.done ? 'done' : ''}"><span>${q.t}</span><span>${q.prog}/${q.n}</span></div>`).join('');
   // ป้าย
   const chips = [];
-  const wb = weekendInfo(); if (wb) chips.push(`<div class="chip" data-p="help">🎉 ${wb.n}: ${wb.d}</div>`);
-  if (ev) chips.push(`<div class="chip ev" data-p="event">🛶 เทศกาล${ev.n} ถึง ${new Date(ev.end).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })}</div>`);
-  if (shielded()) chips.push(`<div class="chip sh" data-p="settings">🛡️ ${S.peaceful ? 'โหมดหมู่บ้านสงบ' : 'มีโล่กันแกล้ง อีก ' + fmtDur(S.counters.shieldUntil - now())}</div>`);
-  if (S.pranksOnMe.length) chips.push(`<div class="chip" style="background:#ffd0c0">😈 มีรอยแกล้ง ${S.pranksOnMe.length} จุดในหมู่บ้าน กวาดเพื่อรับรางวัล!</div>`);
+  const wb = weekendInfo(); if (wb) chips.push(`<div class="chip" data-p="help" title="${wb.n}: ${wb.d}">🎉 ${wb.n}</div>`);
+  if (ev) chips.push(`<div class="chip ev" data-p="event" title="เทศกาล${ev.n}">🛶 ถึง ${new Date(ev.end).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })}</div>`);
+  if (shielded()) chips.push(`<div class="chip sh" data-p="settings" title="${S.peaceful ? 'โหมดหมู่บ้านสงบ' : 'มีโล่กันแกล้ง'}">🛡️ ${S.peaceful ? 'สงบ' : fmtDur(S.counters.shieldUntil - now())}</div>`);
+  if (S.pranksOnMe.length) chips.push(`<div class="chip" style="background:#ffd0c0" title="มีรอยแกล้งในหมู่บ้าน กวาดเพื่อรับรางวัล!">😈 รอยแกล้ง ${S.pranksOnMe.length}</div>`);
   $('chips').innerHTML = chips.join('');
   // ป้ายแจ้งเตือน
   const unread = S.log.filter((e) => !e.read).length; badge('b-log', unread);

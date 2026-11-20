@@ -44,6 +44,7 @@ class World extends Phaser.Scene {
     this.tiles = [];
     for (let y = 0; y < this.H; y++) { this.tiles.push([]); for (let x = 0; x < this.W; x++) this.tiles[y].push(this.add.image(x * T, y * T, 'ts_dirt', 0).setOrigin(0).setDepth(0)); }
     for (let y = 0; y < this.H; y++) for (let x = 0; x < this.W; x++) this.paintTile(x, y);
+    this.bakeGround(0, 0, this.W - 1, this.H - 1);
     this.seed = this.home ? 1 : (this.loc.charCodeAt(0) || 3);
     this.deco = {}; this.forest = [];
     for (let y = 0; y < this.H; y++) for (let x = 0; x < this.W; x++) this.scatterAt(x, y);
@@ -63,6 +64,7 @@ class World extends Phaser.Scene {
       this.spawnVillagers();
     } else this.setupFriend();
     this.buildForest();
+    if (this.home) this.dressVillage();
     this.lookFX();
     this.ambience();
 
@@ -101,21 +103,24 @@ class World extends Phaser.Scene {
     for (let y = 0; y < this.H; y++) g.push(new Array(this.W).fill('g'));
     const rect = (x, y, w, h, v) => { for (let j = y; j < y + h; j++) for (let i = x; i < x + w; i++) if (g[j] && i >= 0 && i < this.W) g[j][i] = v; };
     rect(0, 0, this.W, 2, 'w');           // แม่น้ำด้านบน
-    rect(0, 8, this.W, 2, 'd');           // ถนนหลัก
+    // ทางเดินดินเส้นเล็กคดเคี้ยว (ช่องเดียว แต่พื้นวาดออกมากว้างราว 2 ช่อง)
+    const pathY = (x) => (this.home ? (x < 13 ? 8 : x < 25 ? 9 : 8) : (x < 10 ? 8 : x < 18 ? 9 : 8));
+    for (let x = 0; x < this.W; x++) { const y = pathY(x); g[y][x] = 'p'; if (x > 0 && pathY(x - 1) !== y) g[pathY(x - 1)][x] = 'p'; }
     if (this.home) {
-      rect(3, 6, 1, 2, 'd'); rect(10, 7, 2, 1, 'd'); rect(16, 7, 1, 1, 'd');
-      rect(10, 10, 3, 3, 'd');            // ลานรอบกองไฟ
+      rect(3, 6, 1, 2, 'p'); rect(10, 7, 1, 1, 'p'); rect(16, 7, 1, 2, 'p'); rect(19, 7, 1, 2, 'p');
+      rect(11, 9, 1, 2, 'p'); rect(10, 11, 3, 2, 'p'); rect(11, 10, 1, 4, 'p'); rect(9, 12, 5, 1, 'p'); // ลานรอบกองไฟ (ทรงกลม)
       rect(30, 2, 5, 2, 'w'); rect(31, 4, 3, 1, 'w'); // บึง
       for (const o of S.objects) if (o.type === 'pen') rect(o.x, o.y, 5, 4, 'd');
       for (const key of Object.keys(S.plots)) { const [x, y] = key.split(',').map(Number); g[y][x] = 's'; }
     } else {
-      rect(4, 6, 1, 2, 'd'); rect(9, 10, 8, 4, 'd'); rect(15, 11, 5, 4, 'd'); rect(4, 12, 6, 2, 's'); rect(23, 6, 1, 2, 'd');
+      rect(4, 6, 1, 2, 'p'); rect(9, 10, 8, 4, 'p'); rect(15, 11, 5, 4, 'd'); rect(4, 12, 6, 2, 's'); rect(23, 6, 1, 2, 'p');
     }
   }
   cell(x, y) { return x < 0 || y < 0 || x >= this.W || y >= this.H ? null : this.grid[y][x]; }
   corner(i, j) {
     const c = {}; let best = 'g', bn = 0;
-    for (const [x, y] of [[i - 1, j - 1], [i, j - 1], [i - 1, j], [i, j]]) { const t = this.cell(x, y); if (t && t !== 'g') c[t] = (c[t] || 0) + 1; }
+    for (const [x, y] of [[i - 1, j - 1], [i, j - 1], [i - 1, j], [i, j]]) { const t = this.cell(x, y); if (t && t !== 'g' && t !== 'p') c[t] = (c[t] || 0) + 1; }
+    if (!c.w && !c.s && !c.d && this.cell(i, j) === 'p') return 'd'; // ทางเดิน: ใช้จุดมุมเดียว ทางจึงแคบเหลือ ~1 ช่อง
     for (const t of ['w', 'd', 's']) if ((c[t] || 0) > bn) { best = t; bn = c[t]; }
     return best;
   }
@@ -127,7 +132,66 @@ class World extends Phaser.Scene {
     const key = cs.map((t) => (type && t === type ? '1' : '0')).join('');
     this.tiles[y][x].setTexture('ts_' + name, A.wang[name][key]);
   }
-  setCell(x, y, v) { if (!this.cell(x, y)) return; this.grid[y][x] = v; for (let j = y - 1; j <= y + 1; j++) for (let i = x - 1; i <= x + 1; i++) if (this.cell(i, j)) this.paintTile(i, j); this.scatterAt(x, y); }
+  setCell(x, y, v) { if (!this.cell(x, y)) return; this.grid[y][x] = v; for (let j = y - 1; j <= y + 1; j++) for (let i = x - 1; i <= x + 1; i++) if (this.cell(i, j)) this.paintTile(i, j); this.scatterAt(x, y); if (this.groundTex) this.bakeGround(x - 2, y - 2, x + 2, y + 2); }
+  // ===== พื้นแบบอบภาพ: รวมกระเบื้องเป็นภาพเดียว แล้วเติมใบหญ้า ขอบทาง เงา ก้อนกรวด ทีละพิกเซล =====
+  bakeGround(x0, y0, x1, y1) {
+    const W = this.W * T, H = this.H * T;
+    if (!this.groundTex) {
+      this.groundTex = this.textures.exists('ground_' + this.loc) ? this.textures.get('ground_' + this.loc) : this.textures.createCanvas('ground_' + this.loc, W, H);
+      this.groundImg = this.add.image(0, 0, this.groundTex.key).setOrigin(0).setDepth(0.4);
+      for (const row of this.tiles) for (const t of row) t.setVisible(false);
+    }
+    x0 = Math.max(0, x0); y0 = Math.max(0, y0); x1 = Math.min(this.W - 1, x1); y1 = Math.min(this.H - 1, y1);
+    const ctx = this.groundTex.getContext(), px0 = x0 * T, py0 = y0 * T, pw = (x1 - x0 + 1) * T, ph = (y1 - y0 + 1) * T;
+    ctx.imageSmoothingEnabled = false;
+    // ขยายขอบเขตอ่าน 3px เพื่อดูเพื่อนบ้าน
+    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) { const f = this.tiles[y][x].frame; ctx.drawImage(f.source.image, f.cutX, f.cutY, T, T, x * T, y * T, T, T); }
+    const id = ctx.getImageData(px0, py0, pw, ph), d = id.data, n = pw * ph;
+    const cls = new Uint8Array(n); // 0 หญ้า 1 ดิน 2 น้ำ
+    for (let i = 0; i < n; i++) { const r = d[i * 4], g = d[i * 4 + 1], b = d[i * 4 + 2]; cls[i] = b > r + 10 && b > g - 30 ? 2 : g > r + 12 ? 0 : 1; }
+    const C = (x, y) => (x < 0 || y < 0 || x >= pw || y >= ph ? -1 : cls[y * pw + x]);
+    const H2 = (x, y, s) => hsh(x + px0, y + py0, s);
+    const noise = (x, y) => { // value noise ช่วง ~40px
+      const gx = (x + px0) / 40, gy = (y + py0) / 40, ix = Math.floor(gx), iy = Math.floor(gy), fx = gx - ix, fy = gy - iy;
+      const a = hsh(ix, iy, 71), b = hsh(ix + 1, iy, 71), c = hsh(ix, iy + 1, 71), e = hsh(ix + 1, iy + 1, 71);
+      const sx = fx * fx * (3 - 2 * fx), sy = fy * fy * (3 - 2 * fy); return (a * (1 - sx) + b * sx) * (1 - sy) + (c * (1 - sx) + e * sx) * sy;
+    };
+    const set = (i, r, g, b) => { d[i * 4] = r; d[i * 4 + 1] = g; d[i * 4 + 2] = b; };
+    const mul = (i, k) => { d[i * 4] *= k; d[i * 4 + 1] *= k; d[i * 4 + 2] *= k; };
+    for (let y = 0; y < ph; y++) for (let x = 0; x < pw; x++) {
+      const i = y * pw + x, c = cls[i];
+      if (c === 0) {
+        // หญ้าเข้มขึ้น อิ่มสีขึ้น + โทนอ่อนแก่เป็นหย่อม ๆ (dither)
+        d[i * 4] *= 0.84; d[i * 4 + 1] *= 0.93; d[i * 4 + 2] *= 0.72;
+        const t = noise(x, y), chk = ((x + y + px0 + py0) & 1) === 0;
+        if (t > 0.66) mul(i, chk ? 0.86 : 0.93); else if (t > 0.58 && chk) mul(i, 0.92);
+        else if (t < 0.28 && chk) { d[i * 4] += 14; d[i * 4 + 1] += 14; d[i * 4 + 2] += 4; }
+      } else if (c === 1) {
+        d[i * 4 + 2] *= 0.86; d[i * 4] *= 1.0; d[i * 4 + 1] *= 0.96;
+        // ขอบทางเป็นร่องเงา: ใกล้หญ้า 1px เข้ม, 2-3px เข้มนิด
+        let near = 9; for (let k = 1; k <= 3 && near === 9; k++) if (C(x, y - k) === 0 || C(x - k, y) === 0 || C(x + k, y) === 0 || C(x, y + k) === 0) near = k;
+        if (near === 1) { if (C(x, y - 1) === 0 && H2(x, y, 5) < 0.45) set(i, 64, 124, 40); else mul(i, 0.74); }
+        else if (near === 2) mul(i, 0.86); else if (near === 3) mul(i, 0.94);
+        else { const h = H2(x, y, 6); if (h < 0.025) mul(i, 0.85); else if (h < 0.032) { d[i * 4] += 16; d[i * 4 + 1] += 14; d[i * 4 + 2] += 10; } }
+      }
+    }
+    // ใบหญ้า + ก้อนกรวด
+    const blade = (x, y, len) => {
+      const cols = [[48, 104, 30], [70, 138, 44], [140, 196, 92]];
+      for (let k = 0; k < len; k++) { const yy = y - k; if (yy < 0 || C(x, yy) !== 0) break; const c = k === 0 ? cols[0] : k === len - 1 ? cols[2] : cols[1]; set(yy * pw + x, ...c); }
+    };
+    for (let y = 0; y < ph; y++) for (let x = 0; x < pw; x++) {
+      const c = cls[y * pw + x];
+      if (c === 0) {
+        const h = H2(x, y, 7), edge = C(x, y + 1) === 1 || C(x, y + 2) === 1;
+        if (h < (edge ? 0.22 : 0.012)) blade(x, y, edge ? 3 : 2 + (H2(x, y, 8) < 0.5 ? 1 : 0));
+      } else if (c === 1 && H2(x, y, 9) < 0.0022 && C(x + 1, y) === 1 && C(x, y + 1) === 1 && C(x + 2, y) === 1 && C(x, y - 2) === 1 && C(x, y + 3) === 1) {
+        const i = y * pw + x; set(i, 214, 200, 176); set(i + 1, 190, 174, 150); set(i + pw, 150, 128, 104); set(i + pw + 1, 120, 98, 76);
+      }
+    }
+    ctx.putImageData(id, px0, py0); this.groundTex.refresh();
+  }
+  nearPath(x, y) { for (let j = 0; j <= 1; j++) for (let i = 0; i <= 1; i++) if (this.cell(x + i, y + j) === 'p') return true; return false; }
   // ===== ของตกแต่งธรรมชาติ (ไม่มีผลกับการเล่น) =====
   scatterAt(x, y) {
     const k = x + ',' + y; if (this.deco[k]) { this.deco[k].destroy(); delete this.deco[k]; }
@@ -135,7 +199,7 @@ class World extends Phaser.Scene {
     const pick = (pre, v) => { const p = POOL(pre); return p.length ? p[Math.floor(v * p.length) % p.length] : null; };
     let key = null, ox = 0.2 + hsh(x, y, 3) * 0.6, oy = 0.6 + hsh(x, y, 4) * 0.35;
     if (c === 'g') {
-      if (r > 0.16) return;
+      if (r > 0.16 || this.nearPath(x, y)) return;
       if (this.home && (objAtCell(x, y) || objAtCell(x, y + 1) || objAtCell(x, y + 2))) return;
       key = r2 < 0.42 ? pick('sc_tuft', r2 / 0.42) : r2 < 0.8 ? pick('sc_flower', (r2 - 0.42) / 0.38) : r2 < 0.88 ? pick('sc_stone', (r2 - 0.8) / 0.08) : r2 < 0.93 ? pick('sc_mush', (r2 - 0.88) / 0.05) : pick('sc_leafy', (r2 - 0.93) / 0.07);
     } else if (c === 'w') {
@@ -159,7 +223,7 @@ class World extends Phaser.Scene {
   buildForest() {
     this.forest.forEach((s) => s.destroy()); this.forest = [];
     for (let y = 2; y < this.H + 1; y++) for (let x = 0; x < this.W; x++) {
-      if (this.cell(x, Math.min(y, this.H - 1)) !== 'g' || !this.forestZone(x, Math.min(y, this.H - 1))) continue;
+      if (this.cell(x, Math.min(y, this.H - 1)) !== 'g' || this.nearPath(x, Math.min(y, this.H - 1)) || !this.forestZone(x, Math.min(y, this.H - 1))) continue;
       const r = hsh(x, y, this.seed + 9); if (r > 0.42) continue;
       const v = hsh(x, y, this.seed + 10);
       const pre = r < 0.27 ? 'nat_tree' : r < 0.35 ? 'nat_bush' : r < 0.38 ? 'nat_rock' : r < 0.40 ? 'nat_stump' : 'sc_fd';
@@ -172,6 +236,45 @@ class World extends Phaser.Scene {
       if (/tree|bush|palm|fd/.test(pk)) this.sway(img, /tree|palm/.test(pk) ? 1.2 + hsh(x, y, 13) : 2, 2200 + hsh(x, y, 14) * 1600);
       this.forest.push(img, sh);
     }
+  }
+  // ของแต่งหมู่บ้าน (ถัง ลัง ฟาง ตะเกียง ฯลฯ) ไม่มีผลกับการเล่น ซ่อนเองถ้ามีของจริงมาวางทับ
+  dressVillage() {
+    const L = [
+      ['firewood', 0, 5], ['jar', 1, 6], ['signpost', 1, 7], ['drum', 5, 6], ['hiderack', 6, 4], ['lamppost', 7, 6],
+      ['crates', 8, 5], ['fruitbasket', 8, 6], ['pumpkinbasket', 12, 6], ['sacks', 13, 6], ['bed_yellow', 8, 3], ['bed_red', 12, 3],
+      ['barrel', 14, 5], ['barrels', 14, 6], ['haybale', 18, 6], ['wheelbarrow', 17, 7], ['lamppost', 14, 7], ['bench', 21, 7], ['lamppost', 22, 7],
+      ['boat', 7, 2], ['fishrack', 10, 2], ['fishrod', 13, 2], ['bucket', 14, 2], ['laundry', 23, 2], ['bed_purple', 17, 3],
+      ['logseat', 13, 11], ['logseat', 9, 11, 1], ['spears', 14, 11], ['drum', 10, 13], ['soup', 12, 13],
+      ['scarecrow', 6, 10], ['wateringcan', 2, 12], ['pumpkins', 6, 12], ['well', 7, 14], ['corn', 0, 13],
+      ['haybale', 14, 13], ['haypile', 15, 14], ['beehive', 23, 11], ['coop', 22, 14], ['birdhouse', 0, 10],
+      ['flowerbush', 12, 15], ['topiary', 10, 15], ['bed_purple', 17, 15], ['stonelantern', 5, 9], ['mossrock', 23, 6], ['shells', 4, 2],
+    ];
+    this.props = [];
+    for (const [k, x, y, fl] of L) {
+      if (!A.images['vp_' + k] || !this.owned(x, y)) continue;
+      const px = (x + 0.5) * T + (hsh(x, y, 31) - 0.5) * 8, py = (y + 0.92) * T;
+      const img = this.add.image(px, py, 'vp_' + k).setOrigin(0.5, 1).setDepth(py).setFlipX(!!fl);
+      const sh = this.add.ellipse(px, py - 2, img.width * 0.8, 6, 0x10200a, 0.22).setDepth(2);
+      this.props.push({ x, y, img, sh });
+    }
+    this.propCheck();
+  }
+  propCheck() {
+    if (!this.props) return;
+    for (const p of this.props) { const free = !objAtCell(p.x, p.y) && !S.plots[p.x + ',' + p.y] && !(this.ents || []).some((e) => e.blocking && e.x === p.x && e.y === p.y); p.img.setVisible(free); p.sh.setVisible(free); }
+  }
+  // ขอบเรืองแสงรอบของที่เมาส์ชี้ (แบบเกมมือถือ)
+  setGlow(spr) {
+    if (this.glowSpr === spr) return;
+    if (this.glowSpr && this.glowSpr.active && this.glowFx) { this.glowSpr.preFX.remove(this.glowFx); this.glowTw && this.glowTw.remove(); }
+    this.glowSpr = spr; this.glowFx = null; this.glowTw = null;
+    if (!spr) return;
+    spr.preFX.setPadding(6); this.glowFx = spr.preFX.addGlow(0xfff4b0, 2, 0, false, 0.1, 6);
+    this.glowTw = this.tweens.add({ targets: this.glowFx, outerStrength: 4, duration: 450, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
+  }
+  brackets(x, y, w, h) {
+    const g = this.hl, k = 6; g.lineStyle(2, 0xffffff, 0.75);
+    for (const [cx, cy, sx, sy] of [[x, y, 1, 1], [x + w, y, -1, 1], [x, y + h, 1, -1], [x + w, y + h, -1, -1]]) { g.beginPath(); g.moveTo(cx, cy + sy * k); g.lineTo(cx, cy); g.lineTo(cx + sx * k, cy); g.strokePath(); }
   }
   // โยกตามลม (หมุนรอบโคน)
   sway(img, deg, dur) {
@@ -199,12 +302,7 @@ class World extends Phaser.Scene {
     this.makeTex();
     const W = this.W * T, H = this.H * T;
     // 1) แสงเงาบนพื้นให้ดูนุ่ม ไม่เป็นตาราง
-    const n = Math.round((this.W * this.H) / 22);
-    for (let i = 0; i < n; i++) {
-      const x = hsh(i, 1, this.seed + 20) * W, y = hsh(i, 2, this.seed + 20) * H, light = hsh(i, 3, this.seed + 20) < 0.55;
-      this.add.image(x, y, 'soft').setDepth(0.6).setScale(0.9 + hsh(i, 4, this.seed + 20) * 1.6, 0.6 + hsh(i, 5, this.seed + 20) * 1.0)
-        .setTint(light ? 0xfff0a0 : 0x0f3a08).setAlpha(light ? 0.13 : 0.16);
-    }
+    //    (ย้ายไปอบลงพื้นแบบพิกเซลใน bakeGround แล้ว)
     // 2) น้ำ: ลายคลื่นเลื่อนช้า ๆ บนช่องน้ำที่ล้อมด้วยน้ำ
     this.waves = [];
     for (let y = 0; y < this.H; y++) for (let x = 0; x < this.W; x++) {
@@ -216,8 +314,9 @@ class World extends Phaser.Scene {
     this.waveT = 0;
     // 3) เงาเมฆ
     this.clouds = [];
-    for (let i = 0; i < 4; i++) {
-      const c = this.add.image(Math.random() * W, Math.random() * H, 'soft').setDepth(9050).setTint(0x0a1a2a).setAlpha(0.12).setScale(5 + Math.random() * 3, 3 + Math.random() * 1.5);
+    const nc = Math.max(1, Math.round((W * H) / 520000));
+    for (let i = 0; i < nc; i++) {
+      const c = this.add.image(((i + Math.random() * 0.6) / nc) * W, Math.random() * H, 'soft').setDepth(9050).setTint(0x0a1a2a).setAlpha(0.09).setScale(4 + Math.random() * 2, 2.6 + Math.random() * 1.2);
       c.vx = 7 + Math.random() * 5; this.clouds.push(c);
     }
     // 4) ละอองแสงลอยในอากาศ
@@ -889,11 +988,13 @@ class World extends Phaser.Scene {
     if (!this.placing && this.hover && !uiBlocking()) {
       const [hx, hy] = this.hover; this.hl.clear();
       if (this.cell(hx, hy) && this.owned(hx, hy)) {
-        const o = this.objAtCell(hx, hy);
-        if (o) { const b = BUILDS[o.type]; this.hl.lineStyle(1, 0xffffff, 0.6).strokeRect(o.x * T, o.y * T, b.w * T, b.h * T); }
-        else this.hl.lineStyle(1, 0xffffff, 0.5).strokeRect(hx * T, hy * T, T, T);
-      }
-    }
+        const o = this.objAtCell(hx, hy), r = o && this.osprites[o.id];
+        if (r && r.spr && r.spr.preFX) this.setGlow(r.spr);
+        else if (o) { this.setGlow(null); const b = BUILDS[o.type]; this.brackets(o.x * T, o.y * T, b.w * T, b.h * T); }
+        else { this.setGlow(null); this.brackets(hx * T, hy * T, T, T); }
+      } else this.setGlow(null);
+    } else if (this.glowSpr) this.setGlow(null);
+    if (this.home && (this.propT = (this.propT || 0) + dt) > 0.5) { this.propT = 0; this.propCheck(); }
 
     // น้ำ: ลายคลื่นไหล + ประกายแสงค่อย ๆ ลอยผ่าน
     const cam = this.cameras.main.worldView;

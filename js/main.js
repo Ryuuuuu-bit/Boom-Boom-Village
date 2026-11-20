@@ -61,11 +61,14 @@ document.addEventListener('visibilitychange', () => { if (document.hidden) save(
 
 // ---------- เปิดเกม ----------
 bindUI();
-const game = new Phaser.Game({
+// รอฟอนต์โหลดก่อน (ข้อความในฉากวาดเป็นภาพ ถ้าฟอนต์ยังไม่มาจะได้ฟอนต์สำรองแทน)
+const fontsReady = document.fonts ? Promise.race([Promise.all(['500 12px "BBV Sans"', '600 12px "BBV Sans"', '700 12px "BBV Sans"'].map((f) => document.fonts.load(f, 'กขAa1'))), new Promise((r) => setTimeout(r, 2500))]) : Promise.resolve();
+let game = null;
+fontsReady.catch(() => {}).then(() => { game = new Phaser.Game({
   type: Phaser.AUTO, parent: 'game', backgroundColor: '#1a1816', pixelArt: true, roundPixels: true,
   scale: { mode: Phaser.Scale.RESIZE, width: window.innerWidth, height: window.innerHeight },
   scene: [World],
-});
+}); });
 let started = false;
 const waitReady = setInterval(() => {
   if (!SCENE || !SCENE.player) return;

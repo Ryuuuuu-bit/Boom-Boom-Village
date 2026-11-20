@@ -3,7 +3,7 @@
 const A = window.GAME_ASSETS;
 const T = CFG.TILE;
 let SCENE = null;
-const TXT = (size = 9, color = '#fff') => ({ fontSize: size + 'px', fontFamily: 'Mitr, "Leelawadee UI", Tahoma, sans-serif', color, stroke: '#2a1d14', strokeThickness: 3 });
+const TXT = (size = 9, color = '#fff') => ({ fontSize: size + 'px', fontFamily: '"BBV Sans", "Segoe UI", "Leelawadee UI", Tahoma, sans-serif', fontStyle: '600', color, stroke: '#2a1d14', strokeThickness: 3 });
 
 // ---------- ผังหมู่บ้านเพื่อน ----------
 const FRIEND_W = 30, FRIEND_H = 22;

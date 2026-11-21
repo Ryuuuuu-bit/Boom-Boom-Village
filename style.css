@@ -515,3 +515,19 @@ body:has(#modal:not(.hidden)) #toasts { top: auto; bottom: 18px; }
 #talk-face, .icb.hd, img.hd { image-rendering: auto; }
 .fcode { font-size: 20px; letter-spacing: 2px; background: #ffe066; color: #5a2c00; padding: 1px 8px; border-radius: 8px; border: 2px solid var(--line); }
 .fr-av { width: 48px; height: 48px; flex: none; border-radius: 50%; background: linear-gradient(#9be35f, #48a92c); border: 3px solid var(--line); color: #fff; font-weight: 800; font-size: 22px; display: flex; align-items: center; justify-content: center; text-shadow: 0 2px 0 rgba(0,0,0,.3); }
+
+/* ===== หน้าสร้างตัวละคร ===== */
+.lk { display: flex; gap: 14px; align-items: stretch; flex-wrap: wrap; }
+.lk-prev { flex: 0 0 auto; display: flex; flex-direction: column; align-items: center; gap: 6px; margin: 0 auto;
+  background: radial-gradient(circle at 50% 70%, #cfe79b 0%, #9fcf6a 60%, #7db450 100%); border: 3px solid var(--line); border-radius: 16px; padding: 6px 10px 8px; box-shadow: inset 0 -6px 0 rgba(0,0,0,.08); }
+.lk-prev canvas { width: 192px; height: 192px; }
+.lk-turn { display: flex; gap: 8px; }
+.lk-opts { flex: 1 1 260px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.lk-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.lk-lab { flex: 0 0 82px; font-weight: 700; }
+.lk-sw, .lk-g { display: flex; flex-wrap: wrap; gap: 6px; flex: 1 1 0; }
+.lk-sw .sw { width: 30px; height: 30px; border-radius: 50%; border: 3px solid #fff8e6; box-shadow: 0 0 0 2px var(--line), inset 0 -4px 0 rgba(0,0,0,.18); cursor: pointer; padding: 0; transition: transform .1s; }
+.lk-sw .sw:hover { transform: scale(1.1); }
+.lk-sw .sw.on { box-shadow: 0 0 0 3px #ffcf3a, 0 0 0 5px var(--line), inset 0 -4px 0 rgba(0,0,0,.18); transform: scale(1.12); }
+.lk-row input { flex: 1 1 0; min-width: 0; font: inherit; padding: 7px 10px; border-radius: 10px; border: 2px solid var(--line); background: #fffaf0; }
+.lk-act { display: flex; justify-content: space-between; gap: 8px; margin-top: 4px; }

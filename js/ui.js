@@ -437,7 +437,8 @@ PANELS.event = () => {
 // --- ตั้งค่า ---
 PANELS.settings = () => {
   const canPeace = S.peacefulDay !== dayKey();
-  const html = accountRows() + `<div class="row"><div class="grow">🎵 ดนตรีประกอบ</div><button class="btn sm" data-a="mus">${S.settings.music ? 'เปิดอยู่' : 'ปิดอยู่'}</button></div>
+  const html = accountRows() + `<div class="row"><div class="grow">🧑 ตัวละคร: ${esc(lookName())}<div class="muted">เปลี่ยนเพศ สีผม สีผิว ชุด และชื่อ</div></div><button class="btn sm gold" data-a="look">แต่งตัว</button></div>
+    <div class="row"><div class="grow">🎵 ดนตรีประกอบ</div><button class="btn sm" data-a="mus">${S.settings.music ? 'เปิดอยู่' : 'ปิดอยู่'}</button></div>
     <div class="row"><div class="grow">🔊 เสียงเอฟเฟกต์</div><button class="btn sm" data-a="sfx">${S.settings.sfx ? 'เปิดอยู่' : 'ปิดอยู่'}</button></div>
     <div class="row"><div class="grow">🕊️ โหมดหมู่บ้านสงบ<div class="muted">เปิดแล้วไม่มีใครแกล้งเรา และเราก็แกล้งใครไม่ได้ (สลับได้วันละ 1 ครั้ง)</div></div><button class="btn sm ${S.peaceful ? 'green' : ''}" data-a="peace" ${canPeace ? '' : 'disabled'}>${S.peaceful ? 'เปิดอยู่' : 'ปิดอยู่'}</button></div>
     <div class="row"><div class="grow">💾 บันทึกเกมอัตโนมัติ${AUTH.online ? ' (เซฟขึ้นเซิร์ฟเวอร์)' : 'ในเบราว์เซอร์นี้'}</div><button class="btn sm" data-a="save">บันทึกตอนนี้</button></div>
@@ -447,7 +448,7 @@ PANELS.settings = () => {
     mus: () => { S.settings.music = !S.settings.music; mark(); renderPanel(); }, sfx: () => { S.settings.sfx = !S.settings.sfx; mark(); renderPanel(); },
     peace: () => { S.peaceful = !S.peaceful; S.peacefulDay = dayKey(); mark(); toast(S.peaceful ? '🕊️ เปิดโหมดหมู่บ้านสงบแล้ว' : 'ปิดโหมดสงบ เพื่อน ๆ แกล้งได้แล้ว 😈'); renderPanel(); hud(); },
     save: async () => { save(); if (AUTH.online) { clearTimeout(AUTH.timer); AUTH.timer = null; await authPush(); } toast('💾 บันทึกแล้ว', 'good'); },
-    account: () => openPanel('account'),
+    account: () => openPanel('account'), look: () => openLook(),
     skip: () => { timeSkip(HOUR); toast('⏩ ข้ามเวลาไป 1 ชั่วโมง', 'good'); },
     reset: () => { if (PANEL.confirmReset) { authResetSave(); } else { PANEL.confirmReset = true; toast('กด "ลบเซฟ" อีกครั้งเพื่อยืนยัน', 'bad'); } },
   } };

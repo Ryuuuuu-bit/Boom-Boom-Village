@@ -261,7 +261,7 @@ const API = {
       FROM village_events WHERE target_id = $1 AND day = $3`, [fid, u.id, gameDay()]);
     const village = d ? {
       level: d.level || 1, era: d.era || 1, owned: d.owned, objects: d.objects || [], plots: d.plots || {}, animals: d.animals || [],
-      pranksOnMe: d.pranksOnMe || [], peaceful: !!d.peaceful, shieldUntil: (d.counters && d.counters.shieldUntil) || 0,
+      pranksOnMe: d.pranksOnMe || [], peaceful: !!d.peaceful, shieldUntil: (d.counters && d.counters.shieldUntil) || 0, look: d.look || null,
     } : null;
     return { user: { id: String(f.id), name: f.name }, village, pending: pend.rows.map((e) => ({ ...e.payload, id: 'ev' + e.id, bot: 'u:' + e.actor_id, at: new Date(e.created_at).getTime() })), today: today.rows[0], now: Date.now() };
   },

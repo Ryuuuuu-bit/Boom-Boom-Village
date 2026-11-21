@@ -1,5 +1,5 @@
 # สร้างไฟล์ assets.js (รวมภาพทั้งหมดเป็นข้อความ) เพื่อให้ index.html เปิดด้วยดับเบิลคลิกได้
-import base64, io, json, os, glob
+import base64, io, json, os, glob, sys
 from PIL import Image
 G = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 A = os.path.join(G, 'assets')
@@ -67,14 +67,25 @@ for r in range(src.height // 48):
 out['sheets']['villager'] = {'uri': uri(sheet), 'w': 48, 'h': 48}
 # ตัวละคร chibi: สร้างสไปรต์ชีตเลย์เอาต์เดียวกับ villager (แถวละ 6 เฟรม) จากภาพนิ่ง 4 ทิศ + ขยับเด้งเป็นท่าเดิน/หายใจ
 import math
-def chibi_sheet(files, CH_H=84, FW=96):
+def chibi_sheet(files, CH_H=84, FW=96, walk_prefix=None):
     poses = {}
+    walk = None
+    if walk_prefix and os.path.exists(os.path.join(A, 'hd', walk_prefix + 'south_0.png')):
+        walk = {}
+        raw = {d: [Image.open(os.path.join(A, 'hd', '%s%s_%d.png' % (walk_prefix, d, i))).convert('RGBA') for i in range(4)] for d in ['south', 'north', 'west', 'east']}
+        for d, frs in raw.items():
+            frs = [f.crop(f.getbbox()) for f in frs]
+            sc = CH_H / sorted(f.height for f in frs)[1]  # ขนาดเท่ากันทุกเฟรมในทิศเดียวกัน
+            walk[d] = [f.resize((round(f.width * sc), round(f.height * sc)), Image.LANCZOS) for f in frs]
     for d, fn in files.items():
         im = Image.open(os.path.join(A, 'hd', fn)).convert('RGBA'); im = im.crop(im.getbbox())
         poses[d] = im.resize((round(im.width * CH_H / im.height), CH_H), Image.LANCZOS)
     rows = {1: 'south', 2: 'west', 3: 'east', 4: 'north', 5: 'south', 6: 'west', 7: 'east', 8: 'north'}
     hd = Image.new('RGBA', (FW * 6, FW * 9))
     for r, d in rows.items():
+        if r > 4 and walk and d in walk:  # มีภาพท่าเดินจริง 4 เฟรม: ใช้แทนท่าเด้ง
+            for c, fr in enumerate(walk[d]): hd.alpha_composite(fr, (c * FW + (FW - fr.width) // 2, r * FW + 92 - fr.height))
+            continue
         for c in range(6):
             im = poses[d]
             if r <= 4:  # idle: หายใจ
@@ -84,10 +95,44 @@ def chibi_sheet(files, CH_H=84, FW=96):
             fr = im.resize((round(im.width * sx), round(im.height * sy)), Image.LANCZOS)
             if rot: fr = fr.rotate(rot, resample=Image.BICUBIC, expand=True)
             hd.alpha_composite(fr, (c * FW + (FW - fr.width) // 2, r * FW + 92 - fr.height + round(bob)))
-    return {'uri': uri(hd), 'w': FW, 'h': FW, 'hd': 2}
-# ตัวละคร chibi: สไปรต์ชีตเลย์เอาต์เดียวกับ villager (แถวละ 6 เฟรม) จากภาพนิ่ง + ขยับเด้งเป็นท่าเดิน/หายใจ
-if os.path.exists(os.path.join(A, 'hd', 'ch_south.png')):
-    out['sheets']['villager'] = chibi_sheet({d: 'ch_%s.png' % d for d in ['south', 'west', 'east', 'north']})
+    return {'uri': uri(hd), 'w': FW, 'h': FW, 'hd': 2, 'walk': 4 if walk else 6}
+def player_sheet(prefix, CH_H=84, FW=96):
+    """ชีตตัวผู้เล่นจากท่าเดิน 4 ทิศ x 4 เฟรม: แถว 1-4 ยืนหายใจ (ใช้เฟรมที่ขาชิดที่สุด), แถว 5-8 เดิน
+    คืนค่า (ชีต, แผนที่ส่วน) แผนที่ส่วนใช้เปลี่ยนสีผม/ผิว/ชุดในเกม (ตัวสร้างตัวละคร)"""
+    import numpy as np
+    sys.path.insert(0, os.path.dirname(__file__)); from regions import region_mask
+    walk, masks = {}, {}
+    for d in ['south', 'north', 'west', 'east']:
+        frs = [Image.open(os.path.join(A, 'hd', '%s%s_%d.png' % (prefix, d, i))).convert('RGBA') for i in range(4)]
+        frs = [f.crop(f.getbbox()) for f in frs]
+        ms = [Image.fromarray(region_mask(np.array(f), d) * 60) for f in frs]
+        sc = CH_H / sorted(f.height for f in frs)[1]
+        walk[d] = [f.resize((round(f.width * sc), round(f.height * sc)), Image.LANCZOS) for f in frs]
+        masks[d] = [m.resize(f.size, Image.NEAREST) for m, f in zip(ms, walk[d])]
+    rows = {1: 'south', 2: 'west', 3: 'east', 4: 'north', 5: 'south', 6: 'west', 7: 'east', 8: 'north'}
+    hd = Image.new('RGBA', (FW * 6, FW * 9)); rm = Image.new('L', hd.size)
+    for r, d in rows.items():
+        if r > 4:
+            for c, (fr, m) in enumerate(zip(walk[d], masks[d])):
+                pos = (c * FW + (FW - fr.width) // 2, r * FW + 92 - fr.height)
+                hd.alpha_composite(fr, pos); rm.paste(m, pos, fr.split()[3].point(lambda v: 255 if v > 0 else 0))
+            continue
+        k = min(range(4), key=lambda i: walk[d][i].width)
+        for c in range(4):
+            sy = 1 - 0.025 * math.sin(c / 4 * 2 * math.pi); sx = 1 + 0.012 * math.sin(c / 4 * 2 * math.pi)
+            sz = (round(walk[d][k].width * sx), round(walk[d][k].height * sy))
+            fr = walk[d][k].resize(sz, Image.LANCZOS); m = masks[d][k].resize(sz, Image.NEAREST)
+            pos = (c * FW + (FW - fr.width) // 2, r * FW + 92 - fr.height)
+            hd.alpha_composite(fr, pos); rm.paste(m, pos, fr.split()[3].point(lambda v: 255 if v > 0 else 0))
+    return hd, rm
+# ตัวผู้เล่น ชาย (villager) / หญิง (villager_f) + แผนที่ส่วนสำหรับเปลี่ยนสี (rg_m / rg_f)
+for g, pre in [('m', 'ch_wk_'), ('f', 'ch_wkf_')]:
+    if not os.path.exists(os.path.join(A, 'hd', pre + 'south_0.png')): continue
+    hd, rm = player_sheet(pre)
+    hd.save('/tmp/bbv_sheet_%s.png' % g); rm.save('/tmp/bbv_rg_%s.png' % g)
+    b = io.BytesIO(); rm.save(b, 'PNG', optimize=True)
+    out['sheets']['villager' if g == 'm' else 'villager_f'] = {'uri': uri(hd), 'w': 96, 'h': 96, 'hd': 2, 'walk': 4}
+    out['images']['rg_' + g] = 'data:image/png;base64,' + base64.b64encode(b.getvalue()).decode()
 for v in ['vm', 'vw']:  # ชาวบ้านชาย/หญิง (มีแค่ท่าหน้าตรง ใช้ทุกทิศ)
     if os.path.exists(os.path.join(A, 'hd', 'ch_%s.png' % v)):
         out['sheets']['vil_' + v] = chibi_sheet({d: 'ch_%s.png' % v for d in ['south', 'west', 'east', 'north']}, CH_H=78)

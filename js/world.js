@@ -62,7 +62,7 @@ class World extends Phaser.Scene {
     if (this.real) this.fobjs = this.V.objects.filter((o) => BUILDS[o.type]).map((o) => ({ ...o, data: { ...(o.data || {}) } }));
     this.W = this.home || this.real ? CFG.MAP_W : FRIEND_W; this.H = this.home || this.real ? CFG.MAP_H : FRIEND_H;
     this.cameras.main.setBackgroundColor('#3f7a2c').fadeIn(300);
-    this.makeAnims();
+    applyLook(this); this.makeAnims();
     this.buildGrid();
     this.tiles = [];
     for (let y = 0; y < this.H; y++) { this.tiles.push([]); for (let x = 0; x < this.W; x++) this.tiles[y].push(this.add.image(x * T, y * T, 'ts_dirt', 0).setOrigin(0).setDepth(0)); }
@@ -93,16 +93,16 @@ class World extends Phaser.Scene {
 
     // ผู้เล่น
     const sp = this.home || this.real ? { x: 12.5 * T, y: 9.2 * T } : { x: 1.5 * T, y: 9.2 * T };
-    this.player = this.add.sprite(sp.x, sp.y, 'villager', 30).setOrigin(0.5, 46 / 48);
+    this.player = this.add.sprite(sp.x, sp.y, 'player', 6).setOrigin(0.5, 46 / 48);
     this.shadow = this.add.ellipse(0, 0, 16, 6, 0x1a1816, 0.28).setDepth(2);
     this.dir = 'south'; this.player.play('idle-south');
-    this.nameTag = this.add.text(0, 0, 'คุณ', TXT(7, '#ffe9a8')).setOrigin(0.5, 1).setResolution(4).setDepth(9500);
+    this.nameTag = this.add.text(0, 0, lookName(), TXT(7, '#ffe9a8')).setOrigin(0.5, 1).setResolution(4).setDepth(9500);
 
     const cam = this.cameras.main;
     this.zoom = window.innerWidth < 700 ? 1.6 : CFG.ZOOM;
     cam.setZoom(this.zoom).setBounds(0, 0, this.W * T, this.H * T).startFollow(this.player, true, 0.12, 0.12).setRoundPixels(true);
 
-    this.keys = this.input.keyboard.addKeys('W,A,S,D,UP,DOWN,LEFT,RIGHT');
+    this.keys = this.input.keyboard.addKeys('W,A,S,D,UP,DOWN,LEFT,RIGHT', false); // false: ให้พิมพ์ตัวอักษรในช่องกรอก (เช่นชื่อตัวละคร) ได้
     this.input.keyboard.on('keydown-SPACE', () => !uiBlocking() && this.spaceAct());
     this.input.keyboard.on('keydown-E', () => !uiBlocking() && this.spaceAct());
     this.input.keyboard.on('keydown-ESC', () => { if (this.placing || this.moving) this.stopPlacing(); else closePanel(); });
@@ -844,7 +844,8 @@ class World extends Phaser.Scene {
     }
     // เจ้าของหมู่บ้าน (ยืนหน้ากระท่อมหัวหน้าเผ่า)
     const chief = this.fobjs.find((o) => o.type === 'chief') || { x: 2, y: 4 };
-    this.owner = this.add.sprite((chief.x + 1.5) * T + 30, (chief.y + 2.7) * T, 'villager', 30).setOrigin(0.5, 46 / 48).setDepth((chief.y + 2.7) * T).setTint(0xffe2c4).setInteractive({ useHandCursor: true });
+    const olk = this.real && ownerLookKey(this, this.V.look);
+    this.owner = this.add.sprite((chief.x + 1.5) * T + 30, (chief.y + 2.7) * T, olk || 'villager', olk ? 6 : 30).setOrigin(0.5, 46 / 48).setDepth((chief.y + 2.7) * T).setInteractive({ useHandCursor: true });
     this.ownerTag = this.add.text(this.owner.x, this.owner.y - 50, b.n, TXT(8, '#ffe9a8')).setOrigin(0.5, 1).setResolution(4).setDepth(9500);
     this.owner.on('pointerdown', () => { this.uiClick = true; this.say(this.owner, pick(['สวัสดี! มาเที่ยวเหรอ', 'ช่วยรดน้ำให้หน่อยสิ 💧', 'อย่าแกล้งเยอะนะ 😤', 'ฮิฮิ'])); });
     this.tweens.add({ targets: this.owner, scaleY: 1.04, duration: 900, yoyo: true, repeat: -1 });
@@ -1214,12 +1215,11 @@ class World extends Phaser.Scene {
   }
 
   makeAnims() {
-    if (this.anims.exists('walk-south')) return;
+    // ท่าของตัวผู้เล่นสร้างใน applyLook (look.js) ที่นี่สร้างท่าของชาวบ้าน
+    if (this.anims.exists('vil_vm-walk-south')) return;
     const rows = { idle: { south: 1, west: 2, east: 3, north: 4 }, walk: { south: 5, west: 6, east: 7, north: 8 } };
     for (const [a, dirs] of Object.entries(rows)) for (const [d, r] of Object.entries(dirs)) {
-      const n = a === 'idle' ? 4 : 6;
-      this.anims.create({ key: `${a}-${d}`, frames: this.anims.generateFrameNumbers('villager', { start: r * 6, end: r * 6 + n - 1 }), frameRate: a === 'idle' ? 5 : 10, repeat: -1 });
-      for (const t of ['vil_vm', 'vil_vw']) if (this.textures.exists(t)) this.anims.create({ key: `${t}-${a}-${d}`, frames: this.anims.generateFrameNumbers(t, { start: r * 6, end: r * 6 + n - 1 }), frameRate: a === 'idle' ? 5 : 10, repeat: -1 });
+      for (const t of ['vil_vm', 'vil_vw']) if (this.textures.exists(t)) { const n = a === 'idle' ? 4 : (A.sheets[t].walk || 6); this.anims.create({ key: `${t}-${a}-${d}`, frames: this.anims.generateFrameNumbers(t, { start: r * 6, end: r * 6 + n - 1 }), frameRate: a === 'idle' ? 5 : 10, repeat: -1 }); }
     }
   }
 

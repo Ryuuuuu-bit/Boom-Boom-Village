@@ -86,6 +86,11 @@ $('start-btn').onclick = () => {
   ['hud', 'quest', 'side'].forEach((id) => $(id).classList.remove('hidden'));
   hudPlace(); hud();
   if (window.innerWidth < 760) { $('quest').classList.add('min'); $('q-toggle').textContent = '+'; }
+  // ยังไม่เคยสร้างตัวละคร (ผู้เล่นใหม่หรือเซฟเก่า): เปิดหน้าสร้างตัวละครก่อน แล้วค่อยเล่าเรื่องต่อ
+  if (!S.look) { LOOK_AFTER = startStory; openLook(); return; }
+  startStory();
+};
+function startStory() {
   if (firstRun) {
     talk(CHAPTER_TALK[0], () => { S.welcomed = true; mark(); save(); toast('🎯 เริ่มจากไถดิน: เดินไปที่หญ้าว่างแล้วกด Space (หรือใช้จอบ ⛏️ คลิกที่หญ้า)'); });
   } else {
@@ -94,6 +99,6 @@ $('start-btn').onclick = () => {
     if (missed.length) talk([['npc_grandma', 'ยายหมอบูม', `ระหว่างที่หลานไม่อยู่ ${fmtDur(now() - awaySince)} มีเรื่องเกิดขึ้น ${missed.length} เรื่องนะ:<br>` + missed.slice(0, 4).map((e) => '• ' + e.msg).join('<br>') + (missed.length > 4 ? '<br>…ดูต่อในบันทึก 📜' : '')]], after);
     else after();
   }
-};
+}
 // ทดสอบอัตโนมัติ: เปิดด้วย index.html#auto จะข้ามหน้าโหลด
 if (location.hash === '#auto') { const iv = setInterval(() => { if (!$('start-btn').classList.contains('hidden')) { clearInterval(iv); $('start-btn').click(); } }, 100); }

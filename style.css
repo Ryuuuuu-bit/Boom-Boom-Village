@@ -430,3 +430,33 @@ body:has(#modal:not(.hidden)) #toasts { top: auto; bottom: 18px; }
 .card .pic img.icb { width: 52px; height: 52px; object-fit: contain; }
 .card > div[style*="display:flex"] { flex-wrap: wrap; justify-content: center; }
 .card .btn.sm { padding: 3px 7px 6px; font-size: 12.5px; }
+
+/* ================= หน้าเข้าเกม v5 ================= */
+#loading::before { background-image: url(assets/ui/keyart2.jpg); image-rendering: auto; }
+#loading::after { background:
+  radial-gradient(ellipse at 50% 22%, rgba(255, 214, 120, .28), transparent 45%),
+  linear-gradient(180deg, rgba(20, 10, 4, .25) 0%, rgba(20, 10, 4, 0) 26%, rgba(20, 10, 4, 0) 52%, rgba(16, 10, 4, .72) 100%); }
+#loading .logo { top: 3vh; font-size: 0; animation: logoIn 1s cubic-bezier(.2, 1.5, .4, 1) both, bob 3.2s 1s ease-in-out infinite; filter: drop-shadow(0 10px 14px rgba(30, 12, 2, .55)); }
+#loading .logo img { width: min(560px, 60vw); height: auto; image-rendering: auto; }
+#loading .logo::after { content: ''; position: absolute; inset: 0; pointer-events: none; mix-blend-mode: overlay;
+  -webkit-mask: url(assets/ui/logo.png) center top / min(560px, 60vw) auto no-repeat; mask: url(assets/ui/logo.png) center top / min(560px, 60vw) auto no-repeat;
+  background: linear-gradient(105deg, transparent 40%, rgba(255, 255, 255, .9) 50%, transparent 60%) -200% 0 / 200% 100% no-repeat; animation: shine 4.5s 1.4s ease-in-out infinite; }
+@keyframes shine { 0%, 55% { background-position: -200% 0; } 85%, 100% { background-position: 200% 0; } }
+@keyframes logoIn { from { transform: translateY(-60px) scale(.6); opacity: 0; } }
+.ttl-fx { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 1; }
+.ttl-fx i { position: absolute; left: var(--x); bottom: -10px; width: 6px; height: 6px; border-radius: 50%; background: #fff2a8;
+  box-shadow: 0 0 8px 3px rgba(255, 214, 90, .85); opacity: 0; animation: firefly var(--t) var(--d) linear infinite; }
+.ttl-fx i:nth-child(3n) { width: 4px; height: 4px; background: #ffd27a; }
+.ttl-fx i:nth-child(4n) { border-radius: 0 60% 0 60%; width: 9px; height: 6px; background: #7cc84a; box-shadow: none; }
+@keyframes firefly { 0% { transform: translate(0, 0); opacity: 0; } 10% { opacity: 1; } 50% { transform: translate(30px, -45vh); } 90% { opacity: .9; } 100% { transform: translate(-20px, -95vh) rotate(360deg); opacity: 0; } }
+#auth { width: min(420px, 92vw); animation: tin .6s .3s cubic-bezier(.3, 1.6, .5, 1) both; }
+#loading .au-card { padding: 10px 6px 6px; }
+.au-big { font-size: 28px !important; padding: 12px 14px 16px !important; overflow: hidden; }
+.au-big::after, #loading .big::after { content: ''; position: absolute; inset: 0; background: linear-gradient(105deg, transparent 35%, rgba(255, 255, 255, .55) 50%, transparent 65%) -200% 0 / 200% 100% no-repeat; animation: shine 3s ease-in-out infinite; pointer-events: none; }
+#loading .tag { font-size: 16px; font-weight: 600; color: #fff3d0; text-shadow: 0 2px 0 rgba(0, 0, 0, .5); background: none; backdrop-filter: none; border: 6px solid;
+  border-image: url(assets/ui/skin/hud.png) 8 fill / 16px stretch; image-rendering: pixelated; border-radius: 0; padding: 4px 16px; }
+#loading .bar { border: 3px solid; border-radius: 0; background: none; border-image: url(assets/ui/skin/bar.png) 4 fill / 8px stretch; height: 22px; image-rendering: pixelated; }
+#load-bar { background: url(assets/ui/skin/fill_gold.png) 0 0 / 8px 100% repeat-x; border-radius: 0; box-shadow: none; image-rendering: pixelated; }
+#au-who { border: 6px solid; border-radius: 0; background: none; border-image: url(assets/ui/skin/hud.png) 8 fill / 16px stretch; image-rendering: pixelated; padding: 2px 12px; color: #fff3d0; }
+#loading .tiny { text-shadow: 0 1px 2px #000; }
+@media (max-width: 760px) { #loading .logo { top: 5vh; } #loading .logo img { width: 92vw; } #loading .logo::after { -webkit-mask-size: 92vw auto; mask-size: 92vw auto; } }

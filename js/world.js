@@ -84,7 +84,7 @@ class World extends Phaser.Scene {
     this.input.keyboard.on('keydown-E', () => !uiBlocking() && this.spaceAct());
     this.input.keyboard.on('keydown-ESC', () => { if (this.placing || this.moving) this.stopPlacing(); else closePanel(); });
     this.input.keyboard.on('keydown-R', () => { if (this.placing) { this.placing.flip = !this.placing.flip; this.ghost && this.ghost.setFlipX(this.placing.flip); } });
-    for (const [i, k] of ['ONE', 'TWO', 'THREE', 'FOUR'].entries()) this.input.keyboard.on('keydown-' + k, () => this.home && setTool(['hand', 'hoe', 'seed', 'move'][i]));
+    for (const [i, k] of ['ONE', 'TWO', 'THREE', 'FOUR', 'FIVE'].entries()) this.input.keyboard.on('keydown-' + k, () => this.home && setTool(['hand', 'hoe', 'can', 'seed', 'move'][i]));
     this.input.mouse && this.input.mouse.disableContextMenu();
     this.input.on('pointerdown', (p, over) => this.onDown(p, over));
     this.input.on('pointermove', (p) => this.onMove(p));
@@ -255,7 +255,7 @@ class World extends Phaser.Scene {
       const px = (x + 0.5) * T + (hsh(x, y, 31) - 0.5) * 8, py = (y + 0.92) * T;
       const img = this.add.image(px, py, 'vp_' + k).setOrigin(0.5, 1).setDepth(py).setFlipX(!!fl);
       const sh = this.add.ellipse(px, py - 2, img.width * 0.8, 6, 0x10200a, 0.22).setDepth(2);
-      this.props.push({ x, y, img, sh });
+      this.props.push({ k, x, y, img, sh });
     }
     this.propCheck();
   }
@@ -296,6 +296,7 @@ class World extends Phaser.Scene {
       const wing = (ox, col) => { g.fillStyle = col; g.fillRect(ox + 0, 1, 3, 3); g.fillRect(ox + 3, 0, 3, 3); g.fillRect(ox + 1, 4, 2, 2); g.fillStyle = '#3a2214'; g.fillRect(ox + 6, 1, 1, 5); };
       wing(0, '#ffd23f'); g.fillStyle = '#ffd23f'; g.fillRect(8, 1, 3, 3); g.fillRect(7, 0, 3, 3); g.fillRect(10, 4, 2, 2);
     });
+    canvasTex('raindrop', 2, 7, (g) => { g.fillStyle = 'rgba(200,225,255,.85)'; g.fillRect(1, 0, 1, 6); g.fillStyle = 'rgba(255,255,255,.9)'; g.fillRect(0, 6, 1, 1); });
     canvasTex('smoke', 16, 16, (g) => { const gr = g.createRadialGradient(8, 8, 0, 8, 8, 8); gr.addColorStop(0, 'rgba(235,230,220,.9)'); gr.addColorStop(1, 'rgba(235,230,220,0)'); g.fillStyle = gr; g.fillRect(0, 0, 16, 16); });
   }
   ambience() {
@@ -326,6 +327,16 @@ class World extends Phaser.Scene {
       speedX: { min: -6, max: 6 }, speedY: { min: -14, max: -4 }, scale: { min: 0.25, max: 0.6 },
       alpha: { values: [0, 0.85, 0.85, 0] }, tint: [0xfff3b0, 0xffffff, 0xd8ffb0], blendMode: 'ADD',
     }).setDepth(9060);
+    // 4.5) ฝน (ตกพร้อมกันทุกหมู่บ้าน ตามเวลาจริง)
+    this.rainZone = new Phaser.Geom.Rectangle(0, 0, 10, 10);
+    this.rainEm = this.add.particles(0, 0, 'raindrop', {
+      emitZone: { type: 'random', source: this.rainZone }, lifespan: 700, frequency: 6, quantity: 3,
+      speedX: { min: -50, max: -35 }, speedY: { min: 300, max: 360 }, rotate: 8, alpha: { start: 0.9, end: 0.4 },
+      emitting: false,
+    }).setDepth(9070);
+    this.rainSplash = this.add.particles(0, 0, 'mote', { emitZone: { type: 'random', source: this.rainZone }, lifespan: 260, frequency: 30, quantity: 2, scale: { start: 0.5, end: 0 }, alpha: { start: 0.7, end: 0 }, tint: 0xcfe6ff, emitting: false }).setDepth(9069);
+    this.rainShade = this.add.rectangle(0, 0, 10, 10, 0x2a3c55, 0.22).setOrigin(0).setScrollFactor(0).setDepth(9065).setVisible(false);
+    this.raining = null; this.setRain(rainNow());
     // 5) ผีเสื้อ
     if (this.home || true) {
       this.bflies = [];
@@ -337,6 +348,12 @@ class World extends Phaser.Scene {
         b.home = { w: ow, h: oh }; this.bflies.push(b); this.bflyMove(b);
       }
     }
+  }
+  setRain(on) {
+    if (this.raining === on) return; this.raining = on;
+    if (on) { this.rainEm.start(); this.rainSplash.start(); } else { this.rainEm.stop(); this.rainSplash.stop(); }
+    this.rainShade.setVisible(on); if (this.motes) this.motes.setVisible(!on);
+    (this.bflies || []).forEach((b) => b.setVisible(!on));
   }
   bflyMove(b) {
     const tx = Phaser.Math.Clamp(b.x + rnd(-90, 90), 8, b.home.w - 8), ty = Phaser.Math.Clamp(b.y + rnd(-60, 60), 2.5 * T, b.home.h - 8);
@@ -462,32 +479,94 @@ class World extends Phaser.Scene {
       const [x, y] = key.split(',').map(Number);
       if (this.grid[y][x] !== 's') this.setCell(x, y, 's');
       const st = plotState(p, t); const fl = plotFlags(p, t); const stage = plotStage(p, t);
-      if (st === 'grow' && !fl.dry) { this.fx.fillStyle(0x2b1a0c, 0.28); this.fx.fillRect(x * T + 3, y * T + 3, T - 6, T - 6); }
-      if (fl.dry) { this.fx.lineStyle(1, 0xd9b77c, 0.9); this.fx.lineBetween(x * T + 8, y * T + 10, x * T + 16, y * T + 18); this.fx.lineBetween(x * T + 16, y * T + 18, x * T + 24, y * T + 12); this.fx.lineBetween(x * T + 16, y * T + 18, x * T + 14, y * T + 26); }
-      const sig = [p.crop, stage, fl.dry, fl.pest, st].join('|');
+      // ดิน: ชุ่มน้ำ = สีเข้มมีประกายน้ำ · แห้งขณะมีพืช = รอยแตก
+      if (fl.wet) {
+        const left = (p.wetUntil - t) / wetMs(p); const a = 0.3 + 0.18 * Math.min(1, left * 2);
+        this.fx.fillStyle(0x241206, a).fillRect(x * T + 2, y * T + 3, T - 4, T - 5);
+        this.fx.fillStyle(0x9fd4ff, 0.35).fillRect(x * T + 7, y * T + 9, 2, 1).fillRect(x * T + 20, y * T + 15, 3, 1).fillRect(x * T + 12, y * T + 23, 2, 1);
+      }
       let c = this.crops[key];
-      if (!p.crop) { if (c) { c.spr.destroy(); c.pest.destroy(); c.bub.c.destroy(); delete this.crops[key]; } continue; }
+      const needCrack = !fl.wet && p.crop && st !== 'ripe';
+      if (c && c.crack) c.crack.setVisible(false);
+      if (!p.crop) { if (c) { this.dropCrop(key); } if (!fl.wet) this.crackAt(key, x, y, true); else this.crackAt(key, x, y, false); continue; }
+      this.crackAt(key, x, y, false);
+      const sig = [p.crop, stage, fl.dry, fl.pest, st, fl.wet, st === 'ripe' ? plotQuality(p, t) : -1].join('|');
       if (!c) {
-        const spr = this.add.image((x + 0.5) * T, (y + 1) * T - 3, 'crop_pumpkin_0_soil').setOrigin(0.5, 1).setDepth((y + 1) * T - 3);
+        const spr = this.add.image((x + 0.5) * T, (y + 1) * T, 'stg_' + p.crop + '_0').setOrigin(0.5, 1).setDepth((y + 1) * T - 3);
         const pest = this.add.image((x + 0.7) * T, (y + 0.75) * T, 'pest_caterpillar').setScale(0.55).setDepth((y + 1) * T).setVisible(false);
         this.tweens.add({ targets: pest, x: pest.x - 6, duration: 900, yoyo: true, repeat: -1 });
-        c = this.crops[key] = { spr, pest, bub: this.makeBubble((x + 0.5) * T, y * T + 4), sig: '' };
+        const crack = this.add.image((x + 0.5) * T, (y + 0.5) * T, 'soil_dry').setDepth(1.2).setAlpha(0.7).setVisible(false);
+        const star = this.add.image((x + 0.5) * T + 9, y * T - 12, 'ic_star_gold').setDisplaySize(10, 10).setDepth(9101).setVisible(false);
+        this.tweens.add({ targets: star, y: star.y - 3, duration: 700, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
+        c = this.crops[key] = { spr, pest, crack, star, bub: this.makeBubble((x + 0.5) * T, y * T + 4), sig: '', stage: -1 };
+        this.sway(spr, 3, rnd(1700, 2400));
       }
+      c.crack.setVisible(needCrack);
       if (c.sig === sig && !force) continue;
-      const wasRipe = c.sig.endsWith('ripe'); c.sig = sig;
-      const ripeImg = CROPS[p.crop].img;
-      c.spr.clearTint().setScale(1).setAngle(0);
-      if (stage === 0) c.spr.setTexture('crop_pumpkin_0_soil');
-      else if (stage === 1) c.spr.setTexture('crop_pumpkin_1_sprout');
-      else if (stage === 2) { if (p.crop === 'pumpkin') c.spr.setTexture('crop_pumpkin_2_growing'); else c.spr.setTexture(ripeImg).setScale(0.62).setTint(0xb8d890); }
-      else { c.spr.setTexture(ripeImg); c.spr.setScale(p.crop === 'pumpkin' ? 1 : 0.95); if (!wasRipe && !force) { this.sparkle(c.spr.x, c.spr.y - 10); this.tweens.add({ targets: c.spr, scaleY: c.spr.scaleY * 1.15, duration: 120, yoyo: true }); } }
+      const prevStage = c.stage; c.sig = sig; c.stage = stage;
+      c.spr.setTexture('stg_' + p.crop + '_' + stage).clearTint();
+      if (prevStage !== stage && prevStage >= 0 && !force) {
+        // โตขึ้นหนึ่งขั้น: เด้งดึ๋ง
+        c.spr.setScale(1, 0.7); this.tweens.add({ targets: c.spr, scaleY: 1, duration: 380, ease: 'Back.out' });
+        if (stage === 4) { this.sparkle(c.spr.x, c.spr.y - 14); }
+      } else c.spr.setScale(1);
+      if (fl.dry && stage > 0 && stage < 4) c.spr.setTint(0xd8d0a0); // ขาดน้ำ ใบซีดเล็กน้อย
       c.pest.setVisible(fl.pest);
-      if (st === 'dry0') c.bub.set('w', null, '💧', 0xd8f0ff);
-      else if (fl.dry) c.bub.set('d', null, '💧', 0xffe0b0);
+      const q = st === 'ripe' ? plotQuality(p, t) : 0;
+      c.star.setVisible(st === 'ripe' && q > 0); if (q) c.star.setTexture(q === 2 ? 'ic_star_gold' : 'ic_star_silver').setDisplaySize(10, 10);
+      if (st === 'dry0') c.bub.set('w', 'ic_drop', null, 0xd8f0ff);
       else if (fl.pest) c.bub.set('p', null, '🐛', 0xffe0b0);
       else if (st === 'ripe') c.bub.set('r', ITEMS[p.crop].icon, null, 0xfff4dc);
       else c.bub.set('', null, null);
     }
+    // แปลงที่ถูกถมไปแล้ว
+    for (const key of Object.keys(this.crops)) if (!S.plots[key]) this.dropCrop(key);
+    for (const key of Object.keys(this.cracks || {})) if (!S.plots[key]) { this.cracks[key].destroy(); delete this.cracks[key]; }
+  }
+  dropCrop(key) { const c = this.crops[key]; if (!c) return; c.spr.destroy(); c.pest.destroy(); c.crack.destroy(); c.star.destroy(); c.bub.c.destroy(); delete this.crops[key]; }
+  crackAt(key, x, y, on) { // ดินว่างที่แห้ง: ลายดินแตกจาง ๆ
+    this.cracks = this.cracks || {};
+    let k = this.cracks[key];
+    if (!k && on) k = this.cracks[key] = this.add.image((x + 0.5) * T, (y + 0.5) * T, 'soil_dry').setDepth(1.1).setAlpha(0.35);
+    if (k) k.setVisible(!!on);
+  }
+  // เก็บผลผลิต: ต้นเด้งหลุดจากดิน ผลกระโดดเข้าหาตัวละคร
+  harvestFX(key, r) {
+    const [x, y] = key.split(',').map(Number); const bx = (x + 0.5) * T, by = (y + 1) * T;
+    const ghost = this.add.image(bx, by, 'stg_' + r.crop + '_4').setOrigin(0.5, 1).setDepth(9000);
+    this.tweens.add({ targets: ghost, y: by - 14, scaleY: 1.15, duration: 160, ease: 'Quad.out', onComplete: () => this.tweens.add({ targets: ghost, alpha: 0, y: by - 22, duration: 220, onComplete: () => ghost.destroy() }) });
+    const n = Math.min(r.n, 6);
+    for (let i = 0; i < n; i++) {
+      const it = this.add.image(bx, by - 12, ITEMS[r.crop].icon).setDisplaySize(14, 14).setDepth(9500);
+      const tx = this.player.x + rnd(-6, 6), ty = this.player.y - 24, mx = (bx + tx) / 2 + rnd(-14, 14), my = Math.min(by, ty) - rnd(28, 44);
+      const curve = new Phaser.Curves.QuadraticBezier(new Phaser.Math.Vector2(bx + rnd(-4, 4), by - 12), new Phaser.Math.Vector2(mx, my), new Phaser.Math.Vector2(tx, ty));
+      const o = { t: 0 };
+      this.tweens.add({ targets: o, t: 1, delay: i * 70, duration: 420, ease: 'Sine.in', onUpdate: () => { const v = curve.getPoint(o.t); it.setPosition(v.x, v.y); }, onComplete: () => it.destroy() });
+    }
+    this.dust(bx, by - 4);
+  }
+  // รดน้ำ: หยดน้ำจากบัวโค้งลงดิน
+  waterFX(key) {
+    const [x, y] = key.split(',').map(Number); const tx = (x + 0.5) * T, ty = (y + 0.7) * T;
+    const sx = this.player.x + ({ east: 10, west: -10 }[this.dir] || 0), sy = this.player.y - 18;
+    const can = this.add.image(sx, sy - 4, 'ui_can').setDisplaySize(14, 14).setDepth(this.player.depth + 1).setFlipX(this.dir === 'west').setAngle(this.dir === 'west' ? 25 : -25);
+    this.tweens.add({ targets: can, angle: this.dir === 'west' ? 45 : -45, duration: 180, yoyo: true, hold: 260, onComplete: () => can.destroy() });
+    for (let i = 0; i < 10; i++) {
+      const d = this.add.rectangle(sx, sy, 2, 3, 0x8fd0ff, 0.95).setDepth(9000);
+      this.tweens.add({ targets: d, x: tx + rnd(-9, 9), y: ty + rnd(-6, 6), delay: i * 35, duration: 260, ease: 'Quad.in', onComplete: () => { d.destroy(); } });
+    }
+    this.time.delayedCall(320, () => this.splash(tx, ty));
+  }
+  // ไถดิน: จอบสับ + ก้อนดินกระเด็น
+  tillFX(x, y) {
+    const cx = (x + 0.5) * T, cy = (y + 0.8) * T;
+    const hoe = this.add.image(this.player.x + ({ east: 10, west: -10 }[this.dir] || 0), this.player.y - 26, 'ui_hoe').setDisplaySize(14, 14).setDepth(this.player.depth + 1).setAngle(-60);
+    this.tweens.add({ targets: hoe, angle: 30, y: hoe.y + 8, duration: 140, ease: 'Quad.in', onComplete: () => this.tweens.add({ targets: hoe, alpha: 0, duration: 150, onComplete: () => hoe.destroy() }) });
+    for (let i = 0; i < 6; i++) {
+      const c = this.add.rectangle(cx, cy, 2, 2, pick([0x6b4226, 0x4a2c17, 0x8a5a36]), 1).setDepth(9000);
+      this.tweens.add({ targets: c, x: cx + rnd(-12, 12), y: cy - rnd(4, 12), duration: 180, ease: 'Quad.out', yoyo: false, onComplete: () => this.tweens.add({ targets: c, y: c.y + 8, alpha: 0, duration: 200, onComplete: () => c.destroy() }) });
+    }
+    this.cameras.main.shake(60, 0.0015);
   }
   sparkle(x, y, n = 6) {
     for (let i = 0; i < n; i++) {
@@ -604,12 +683,15 @@ class World extends Phaser.Scene {
     for (const o of this.fobjs) this.addObj(o);
     this.fplots = {};
     for (const p of v.plots) {
-      const s = this.add.image((p.x + 0.5) * T, (p.y + 1) * T - 3, p.stage >= 3 ? CROPS[p.crop].img : p.stage === 2 ? CROPS[p.crop].img : 'crop_pumpkin_1_sprout').setOrigin(0.5, 1).setDepth((p.y + 1) * T - 3);
-      if (p.stage === 2) s.setScale(0.62).setTint(0xb8d890);
+      const s = this.add.image((p.x + 0.5) * T, (p.y + 1) * T, 'stg_' + p.crop + '_' + Math.min(4, p.stage + 1)).setOrigin(0.5, 1).setDepth((p.y + 1) * T - 3);
+      this.sway(s, 3, rnd(1700, 2400));
+      let ck = null;
+      if (p.need === 'water') { s.setTint(0xd8d0a0); ck = this.add.image((p.x + 0.5) * T, (p.y + 0.5) * T, 'soil_dry').setDepth(1.2).setAlpha(0.55); }
+      else this.fx.fillStyle(0x241206, 0.4).fillRect(p.x * T + 2, p.y * T + 3, T - 4, T - 5);
       const pest = this.add.image((p.x + 0.7) * T, (p.y + 0.75) * T, 'pest_caterpillar').setScale(0.55).setDepth((p.y + 1) * T).setVisible(p.need === 'pest');
       const bub = this.makeBubble((p.x + 0.5) * T, p.y * T + 4);
-      if (p.need === 'water') bub.set('w', null, '💧', 0xffe0b0); else if (p.need === 'pest') bub.set('p', null, '🐛', 0xffe0b0);
-      this.fplots[p.x + ',' + p.y] = { p, s, pest, bub };
+      if (p.need === 'water') bub.set('w', 'ic_drop', null, 0xffe0b0); else if (p.need === 'pest') bub.set('p', null, '🐛', 0xffe0b0);
+      this.fplots[p.x + ',' + p.y] = { p, s, pest, bub, ck };
     }
     const pen = this.fobjs.find((o) => o.type === 'pen');
     for (const fa of v.animals) {
@@ -643,6 +725,7 @@ class World extends Phaser.Scene {
     if (helpLeft(b) <= 0) { toast(`วันนี้ช่วย${b.n}ครบโควตาแล้ว (${CFG.HELP_PER_FRIEND} ครั้ง/คน)`, 'bad'); sfx('error'); return true; }
     const kind = fp.p.need; const r = doHelp(b, kind);
     fp.p.need = null; fp.bub.set('', null, null); fp.pest.setVisible(false); mark();
+    if (kind === 'water') { this.waterFX(key); fp.s.clearTint(); if (fp.ck) { fp.ck.destroy(); fp.ck = null; } const [px, py] = key.split(',').map(Number); this.fx.fillStyle(0x241206, 0.4).fillRect(px * T + 2, py * T + 3, T - 4, T - 5); }
     sfx(kind === 'water' ? 'water' : 'pest'); this.floatText(fp.s.x, fp.s.y - 18, kind === 'water' ? '💧 รดน้ำแล้ว' : '🐛 ไล่หนอนแล้ว');
     toast(`💛 ช่วย${b.n}แล้ว ได้ ${r}`, 'good'); friendBar(b); hud();
     if (Math.random() < 0.3) this.say(this.owner, pick(['ขอบใจนะ!', 'น่ารักที่สุด 💛', 'เดี๋ยวไปช่วยคืนนะ']));
@@ -792,6 +875,7 @@ class World extends Phaser.Scene {
     }
     const tool = getTool(); const key = cx + ',' + cy;
     if (!this.owned(cx, cy)) { if (!drag) { if (cx >= S.owned.w || cy >= S.owned.h) openPanel('expand'); } return; }
+    if (!drag && this.isRefill(cx, cy)) { this.enqueue(cx, cy, () => this.refillAt(cx, cy)); return; }
     if (tool === 'move') { const o = objAtCell(cx, cy); if (o && !BUILDS[o.type].debris) { this.startPlacing(o.type, false, o); } else toast('คลิกที่สิ่งก่อสร้างหรือของแต่งที่จะย้าย'); return; }
     if (tool === 'hoe') {
       if (this.cell(cx, cy) === 'g' && !objAtCell(cx, cy) && !S.plots[key]) { this.enqueue(cx, cy, () => this.till(cx, cy)); return; }
@@ -811,6 +895,7 @@ class World extends Phaser.Scene {
     if (!this.home) { if (this.fplots[fx + ',' + fy]) this.friendPlot(fx + ',' + fy); return; }
     const key = fx + ',' + fy;
     if (S.plots[key]) { this.usePlot(key, getTool()); return; }
+    if (this.isRefill(fx, fy)) { this.refillAt(fx, fy); return; }
     const o = objAtCell(fx, fy); if (o) { this.useObj(o); return; }
     if (this.owned(fx, fy) && this.cell(fx, fy) === 'g') this.till(fx, fy);
   }
@@ -826,30 +911,53 @@ class World extends Phaser.Scene {
     if (S.plots[key] || this.cell(x, y) !== 'g' || objAtCell(x, y)) return;
     if (y === 8 || y === 9 || y < 2) { toast('ไถถนนหรือริมน้ำไม่ได้นะ', 'bad'); return; }
     if (plotCount() >= PLOTS_BY_LEVEL(S.level)) { toast(`แปลงผักเต็มแล้ว (${plotCount()}/${PLOTS_BY_LEVEL(S.level)}) เลเวลขึ้นจะได้เพิ่ม`, 'bad'); sfx('error'); return; }
-    S.plots[key] = { crop: null }; this.setCell(x, y, 's'); stat('till'); sfx('till'); this.dust((x + 0.5) * T, (y + 0.8) * T); mark();
+    S.plots[key] = newPlot(); this.setCell(x, y, 's'); stat('till'); sfx('till'); this.tillFX(x, y); this.dust((x + 0.5) * T, (y + 0.8) * T); mark();
     this.refreshPlots();
   }
   untill(x, y) { const key = x + ',' + y; if (!S.plots[key] || S.plots[key].crop) return; delete S.plots[key]; this.setCell(x, y, 'g'); mark(); this.refreshPlots(); toast('ถมแปลงคืนเป็นหญ้าแล้ว'); }
   usePlot(key, tool) {
     const p = S.plots[key]; const st = plotState(p); const fl = plotFlags(p); const [x, y] = key.split(',').map(Number);
     const wx = (x + 0.5) * T, wy = y * T + 8;
+    const doWater = () => {
+      const r = waterPlot(key);
+      if (r === 'empty') { toast('🪣 บัวรดน้ำหมดแล้ว! เดินไปเติมที่แม่น้ำ/บ่อน้ำ (คลิกที่น้ำ)', 'bad'); sfx('error'); return false; }
+      if (r) { this.waterFX(key); this.floatText(wx, wy, `💧 ${canLeft()}/${CFG.CAN_MAX}`, '#bfe6ff'); }
+      return r;
+    };
+    if (tool === 'can' && st !== 'ripe') { // ถือบัว: รดได้ทุกแปลง (รวมดินว่าง) ยกเว้นที่ชุ่มอยู่แล้ว
+      if (fl.wet) { this.floatText(wx, wy, 'ดินยังชุ่มอยู่', '#d8f0ff'); } else doWater();
+      this.refreshPlots(); hud(); return;
+    }
     if (st === 'empty') {
       const c = S.seedPick && cropUnlocked(S.seedPick) ? S.seedPick : 'pumpkin';
       const r = plantPlot(key, c);
       if (r === 'money') { toast(`เปลือกหอยไม่พอซื้อเมล็ด${CROPS[c].n} (${CROPS[c].seed} 🐚)`, 'bad'); sfx('error'); return; }
-      if (r === 'ok') this.floatText(wx, wy, '🌱 ' + CROPS[c].n);
-    } else if (st === 'dry0') { waterPlot(key); this.floatText(wx, wy, '💧'); this.splash(wx, wy + 10); }
-    else if (fl.dry) { waterPlot(key); this.floatText(wx, wy, '💧 เร็วขึ้น 10%'); this.splash(wx, wy + 10); }
+      if (r === 'ok') { this.floatText(wx, wy, '🌱 ' + CROPS[c].n); this.dust(wx, wy + 16); if (!S.plots[key].germ) setHint('💧 หยอดเมล็ดแล้ว อย่าลืมรดน้ำ เมล็ดถึงจะงอก'); }
+    } else if (st === 'dry0') { doWater(); }
     else if (fl.pest) { shooPest(key); this.floatText(wx, wy, '🐛 ไล่แล้ว +1 ผลผลิต'); this.dust(wx, wy + 10); }
+    else if (fl.dry) { doWater(); }
     else if (st === 'ripe') {
       const r = harvestPlot(key);
       if (r === 'full') return storageFullMsg();
-      if (r) { this.floatText(wx, wy, `+${r.n} ${ITEMS[r.crop].n}`); this.flyIcon(wx, wy, ITEMS[r.crop].icon); this.sparkle(wx, wy + 6); }
+      if (r) {
+        const Q = QUALITY[r.q];
+        this.harvestFX(key, r);
+        this.time.delayedCall(450, () => { this.floatText(wx, wy, `+${r.n} ${ITEMS[r.crop].n}${Q.star ? ' ' + Q.star + Q.n : ''}`, r.q === 2 ? '#ffe27a' : r.q === 1 ? '#e6f0ff' : undefined); this.flyIcon(this.player.x, this.player.y - 24, ITEMS[r.crop].icon); });
+        if (r.q === 2) this.sparkle(wx, wy + 6, 10);
+        if (r.regrow) this.time.delayedCall(700, () => this.floatText(wx, wy - 10, `🌿 ต้นยังอยู่ เก็บได้อีก ${r.left} ครั้ง`, '#c8f59a'));
+      }
       // ปลูกต่อทันทีถ้าถือเมล็ด
-      if (tool === 'seed') this.usePlot(key, 'none');
+      if (tool === 'seed' && r && !r.regrow) this.usePlot(key, 'none');
     } else if (st === 'grow') { if (tool !== 'drag') openPanel('plot', key); }
     this.refreshPlots(); hud();
   }
+  // เติมน้ำในบัว
+  refillAt(x, y) {
+    const got = refillCan(); sfx('water'); this.splash((x + 0.5) * T, (y + 0.5) * T);
+    this.floatText(this.player.x, this.player.y - 36, got ? `🪣 เติมน้ำเต็มบัว ${CFG.CAN_MAX}/${CFG.CAN_MAX}` : 'บัวเต็มอยู่แล้ว', '#bfe6ff'); hud();
+  }
+  isRefill(x, y) { return this.cell(x, y) === 'w' || (this.props || []).some((q) => q.k === 'well' && q.x === x && q.y === y && q.img.visible); }
+  nearWaterCell(x, y) { for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) if (this.cell(x + i, y + j) === 'w') return [x + i, y + j]; return null; }
   splash(x, y) { for (let i = 0; i < 7; i++) { const d = this.add.circle(x + rnd(-6, 6), y, 2, 0x8fd0ff, 0.9).setDepth(9000); this.tweens.add({ targets: d, y: y - rnd(6, 14), x: d.x + rnd(-8, 8), alpha: 0, duration: rnd(300, 500), onComplete: () => d.destroy() }); } }
   useObj(o) {
     const b = BUILDS[o.type];
@@ -1013,9 +1121,10 @@ class World extends Phaser.Scene {
     // เงาเมฆลอยผ่าน + ละอองแสงตามกล้อง
     if (this.clouds) { const W = this.W * T; for (const c of this.clouds) { c.x += c.vx * dt; if (c.x - c.displayWidth / 2 > W) { c.x = -c.displayWidth / 2; c.y = Math.random() * this.H * T; } } }
     if (this.moteZone) this.moteZone.setTo(cam.x, cam.y, cam.width, cam.height);
+    if (this.rainZone) { this.rainZone.setTo(cam.x - 40, cam.y - 40, cam.width + 80, cam.height); if (this.raining) this.rainShade.setSize(this.scale.width, this.scale.height); }
 
     this.refreshAcc += dtMs;
-    if (this.refreshAcc > 400) { this.refreshAcc = 0; if (this.home) { this.refreshPlots(); this.animalBubbles(); this.objBubbles(); } setHint(this.hintText()); }
+    if (this.refreshAcc > 400) { this.refreshAcc = 0; this.setRain(rainNow()); if (this.home) { this.refreshPlots(); this.animalBubbles(); this.objBubbles(); } setHint(this.hintText()); }
   }
   objBubbles() {
     const t = now();
@@ -1037,7 +1146,8 @@ class World extends Phaser.Scene {
     if (this.placing) return '';
     if (!this.home) return `หมู่บ้าน${this.bot.n} · คลิกแปลงที่มี 💧/🐛 หรือสัตว์ที่หิวเพื่อช่วย · ใช้แถบด้านล่างเพื่อแกล้ง`;
     const [fx, fy] = this.frontCell(); const key = fx + ',' + fy; const p = S.plots[key];
-    if (p) { const st = plotState(p), fl = plotFlags(p); if (st === 'empty') return `Space: ปลูก${CROPS[S.seedPick || 'pumpkin'].n}`; if (st === 'dry0' || fl.dry) return 'Space: รดน้ำ'; if (fl.pest) return 'Space: ไล่หนอน'; if (st === 'ripe') return 'Space: เก็บผลผลิต'; return `${CROPS[p.crop].n} · อีก ${fmtDur(p.readyAt - now())} สุก`; }
+    if (p) { const st = plotState(p), fl = plotFlags(p); if (st === 'empty') return `Space: ปลูก${CROPS[S.seedPick || 'pumpkin'].n}`; if (fl.pest) return 'Space: ไล่หนอน'; if (st === 'dry0' || fl.dry) return `Space: รดน้ำ (บัว ${canLeft()}/${CFG.CAN_MAX})`; if (st === 'ripe') return 'Space: เก็บผลผลิต'; return `${CROPS[p.crop].n} · ${fl.wet ? '💧ดินชุ่ม' : '🏜️ดินแห้ง'} · อีก ${fmtDur(plotReadyAt(p) - now())} สุก`; }
+    if (this.isRefill(fx, fy)) return `Space: เติมน้ำในบัว (${canLeft()}/${CFG.CAN_MAX})`;
     const o = objAtCell(fx, fy); if (o) return `Space: ใช้${BUILDS[o.type].n}`;
     if (this.owned(fx, fy) && this.cell(fx, fy) === 'g') return 'Space: ไถดินทำแปลงผัก';
     return '';

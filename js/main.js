@@ -2,7 +2,7 @@
 'use strict';
 // S ถูกตั้งหลังเข้าสู่ระบบ (ดู js/auth.js)
 let firstRun = false, awaySince = 0;
-const authReady = authBoot().then(() => { firstRun = !S.welcomed; awaySince = S.lastSeen; dailyReset(); if (AUTH.migrated) setTimeout(() => toast('☁️ ย้ายหมู่บ้านเดิมในเครื่องนี้ขึ้นบัญชีแล้ว', 'good'), 1500); });
+const authReady = authBoot().then(() => { firstRun = !S.welcomed; awaySince = S.lastSeen; migratePlots(S); applyRain(); dailyReset(); if (AUTH.migrated) setTimeout(() => toast('☁️ ย้ายหมู่บ้านเดิมในเครื่องนี้ขึ้นบัญชีแล้ว', 'good'), 1500); });
 
 // ---------- เหตุการณ์ ----------
 let pendingLevel = [];
@@ -30,7 +30,7 @@ function travel(loc) {
 // ---------- ข้ามเวลา (โหมดทดสอบ) ----------
 function timeSkip(ms) {
   const sh = (o, ks) => ks.forEach((k) => { if (o && o[k]) o[k] -= ms; });
-  for (const p of Object.values(S.plots)) sh(p, ['startAt', 'readyAt', 'dryAt', 'pestAt']);
+  for (const p of Object.values(S.plots)) sh(p, ['at', 'wetUntil', 'pestAt']);
   for (const a of S.animals) sh(a, ['fedAt', 'readyAt']);
   for (const o of S.objects) { if (o.data && o.data.queue) o.data.queue.forEach((j) => sh(j, ['start', 'end'])); if (o.data && o.data.at) o.data.at -= ms; }
   for (const o of S.orders) if (o.readyAt) o.readyAt -= ms;
@@ -45,6 +45,7 @@ function gameTick() {
   dailyReset();
   if (S.welcomed && (!SCENE || !SCENE.placing)) { botTick(); revengeTick(); }
   ordersTick();
+  if (S.plots) { migratePlots(S); if (applyRain() && SCENE && SCENE.home) SCENE.refreshPlots(); }
   // ชาวบ้านช่วยรดน้ำดินแห้ง
   const huts = S.objects.filter((o) => o.type === 'hut').length;
   if (huts && S.villagerWater.used < huts * CFG.VILLAGER_WATER_PER_DAY) {

@@ -312,3 +312,9 @@ img.bi { width: 20px; height: 20px; vertical-align: -5px; margin: -4px 0; }
 #au-stop .au-card { width: min(360px, 90vw); text-align: center; }
 #au-stop h3 { margin: 0 0 6px; }
 #loading.authing .bar, #loading.authing .tag { display: none; }
+
+/* ระบบฟาร์ม v3 */
+.chip.rain { background: linear-gradient(#e2efff, #b9d4f5); border-color: #4f78a8; box-shadow: 0 2px 0 #4f78a8; }
+#canbtn.low span { color: #ffd0c0; }
+#canbtn.low i img { animation: canlow 1s ease-in-out infinite; }
+@keyframes canlow { 50% { transform: scale(1.15) rotate(-10deg); } }

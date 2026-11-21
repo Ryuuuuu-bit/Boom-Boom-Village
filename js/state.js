@@ -198,64 +198,152 @@ function claimLogin() {
   return grant(r);
 }
 
-// ---------- ฟาร์ม ----------
+// ---------- ฟาร์ม (ระบบดินชื้น v3) ----------
+// แปลง: { crop, dur, prog(ms ที่โตแล้ว), at(เวลาที่คำนวณล่าสุด), germ(งอกแล้ว), wetUntil, dryMs, pestAt, pestDone, bonus, comp, h(เก็บไปแล้วกี่ครั้ง) }
+// ดินชุ่ม = โตเต็มสปีด · ดินแห้ง = โตช้าเหลือ DRY_RATE · เมล็ดยังไม่รดน้ำ = ไม่งอก
 function plotCount() { return Object.keys(S.plots).length; }
 function cropUnlocked(c) { return CROPS[c].lv <= S.level; }
+function wetMs(p) { return p && p.crop ? clamp(p.dur * CFG.WET_FRAC, CFG.WET_MIN_MS, CFG.WET_MAX_MS) : CFG.WET_EMPTY_MS; }
+function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
+// คำนวณความคืบหน้าถึงเวลา t (ไม่แก้ข้อมูล)
+function plotCalc(p, t) {
+  const r = { prog: p.prog || 0, dryMs: p.dryMs || 0, ripeAt: null };
+  if (!p.crop || !p.germ) return r;
+  const a = p.at || t; if (t <= a || r.prog >= p.dur) return r;
+  const wEnd = Math.min(t, Math.max(a, p.wetUntil || 0));
+  let need = p.dur - r.prog; const wet = wEnd - a;
+  if (wet >= need) { r.prog = p.dur; r.ripeAt = a + need; return r; }
+  r.prog += wet; need -= wet;
+  const dry = t - wEnd, dg = dry * CFG.DRY_RATE;
+  if (dg >= need) { r.prog = p.dur; r.dryMs += need / CFG.DRY_RATE; r.ripeAt = wEnd + need / CFG.DRY_RATE; } else { r.prog += dg; r.dryMs += dry; }
+  return r;
+}
+function plotAdvance(p, t = now()) { if (!p || !p.crop || (p.at && t <= p.at)) return; const r = plotCalc(p, t); p.prog = r.prog; p.dryMs = r.dryMs; p.at = t; }
+function plotWet(p, t = now()) { return !!p && (p.wetUntil || 0) > t; }
+// เวลาที่จะสุก (ประมาณจากความชื้นตอนนี้ ถ้าไม่รดเพิ่ม)
+function plotReadyAt(p, t = now()) {
+  const r = plotCalc(p, t); if (r.prog >= p.dur) return r.ripeAt || t;
+  const left = p.dur - r.prog; const wl = Math.max(0, (p.wetUntil || 0) - t);
+  return left <= wl ? t + left : t + wl + (left - wl) / CFG.DRY_RATE;
+}
 function plotState(p, t = now()) {
   if (!p || !p.crop) return 'empty';
-  if (!p.readyAt) return 'dry0';            // ปลูกแล้วยังไม่รดน้ำ
-  if (t >= p.readyAt) return 'ripe';
-  return 'grow';
+  if (!p.germ) return 'dry0';            // เพิ่งหยอดเมล็ด ยังไม่รดน้ำ
+  return plotCalc(p, t).prog >= p.dur ? 'ripe' : 'grow';
 }
 function plotFlags(p, t = now()) {
   const st = plotState(p, t);
-  return { dry: st === 'grow' && p.dryAt && t >= p.dryAt && !p.dryDone, pest: st === 'grow' && p.pestAt && t >= p.pestAt && !p.pestDone };
+  return { dry: st === 'grow' && !plotWet(p, t), pest: st === 'grow' && p.pestAt && t >= p.pestAt && !p.pestDone, wet: plotWet(p, t) };
 }
-function plotStage(p, t = now()) { // 0..3 สำหรับภาพ
-  const st = plotState(p, t); if (st === 'empty') return -1; if (st === 'dry0') return 0; if (st === 'ripe') return 3;
-  const f = (t - p.startAt) / (p.readyAt - p.startAt); return f < 0.35 ? 1 : 2;
+function plotFrac(p, t = now()) { return p && p.crop ? plotCalc(p, t).prog / p.dur : 0; }
+function plotStage(p, t = now()) { // 0..4 สำหรับภาพ: เมล็ด ต้นอ่อน ต้นเล็ก ต้นโต สุก
+  const st = plotState(p, t); if (st === 'empty') return -1; if (st === 'dry0') return 0; if (st === 'ripe') return 4;
+  const f = plotFrac(p, t); return f < 0.12 ? 0 : f < 0.4 ? 1 : f < 0.72 ? 2 : 3;
 }
+// คุณภาพตอนเก็บ: 0 ธรรมดา 1 เงิน 2 ทอง (ดูจากเวลาที่ปล่อยดินแห้ง + หนอน + ปุ๋ย)
+function plotQuality(p, t = now()) {
+  const r = plotCalc(p, t); const dryFrac = (r.dryMs * CFG.DRY_RATE) / p.dur;
+  let q = dryFrac < 0.08 ? 2 : dryFrac < 0.35 ? 1 : 0;
+  if (p.pestAt && !p.pestDone && t >= p.pestAt) q = Math.max(0, q - 1);
+  if (p.comp) q = Math.min(2, q + 1);
+  return q;
+}
+function newPlot(old) { return { crop: null, wetUntil: (old && old.wetUntil) || 0 }; }
 function plantPlot(key, crop) {
   const p = S.plots[key]; if (!p || p.crop) return 'no';
   const c = CROPS[crop];
   if ((S.seeds[crop] || 0) > 0) S.seeds[crop]--;
   else if (!pay({ shells: c.seed })) return 'money';
-  const tut = S.story.ch === 0 && S.story.step <= 4;
-  S.plots[key] = { crop, dur: tut ? CFG.TUTORIAL_GROW_MS : c.ms, bonus: 0 };
+  const tut = S.story.ch === 0 && S.story.step <= 4; const t = now();
+  const np = { crop, dur: tut ? CFG.TUTORIAL_GROW_MS : c.ms, prog: 0, at: t, germ: false, wetUntil: p.wetUntil || 0, dryMs: 0, bonus: 0, h: 0 };
+  if (plotWet(np, t)) germinate(np, t); // หยอดลงดินที่รดน้ำไว้แล้ว งอกเลย
+  S.plots[key] = np;
   stat('plant'); if (crop === 'corn') stat('plant_corn'); sfx('plant'); mark(); return 'ok';
 }
+function germinate(p, t) {
+  p.germ = true; p.at = t;
+  if (p.dur >= CFG.DRY_MIN_MS && !p.h && Math.random() < CFG.PEST_CHANCE) p.pestAt = t + p.dur * rnd(0.25, 0.75);
+}
+// รดน้ำ: who = ใครรดให้ (ไม่ระบุ = ผู้เล่นเอง ใช้น้ำในบัว)
+function canWater(p, t = now()) { return !!p && !plotWet(p, t) && plotState(p, t) !== 'ripe'; }
 function waterPlot(key, who) {
   const p = S.plots[key]; const t = now();
-  if (plotState(p) === 'dry0') {
-    p.startAt = t; p.readyAt = t + p.dur;
-    if (p.dur >= CFG.DRY_MIN_MS) {
-      if (Math.random() < CFG.DRY_CHANCE) p.dryAt = t + p.dur * rnd(0.3, 0.7);
-      if (Math.random() < CFG.PEST_CHANCE) p.pestAt = t + p.dur * rnd(0.25, 0.75);
-    }
-    if (!who) { stat('water'); sfx('water'); }
-    mark(); return true;
-  }
-  if (plotFlags(p).dry) { p.readyAt -= (p.readyAt - t) * CFG.DRY_CUT; p.dryDone = true; if (!who) { stat('water'); sfx('water'); addXP(1); } mark(); return true; }
-  return false;
+  if (!canWater(p, t)) return false;
+  if (!who) { if (canLeft() <= 0) return 'empty'; S.can.w--; }
+  plotAdvance(p, t);
+  p.wetUntil = t + wetMs(p);
+  if (p.crop && !p.germ) germinate(p, t);
+  if (!who) { stat('water'); sfx('water'); }
+  mark(); return true;
 }
+function canLeft() { if (!S.can) S.can = { w: CFG.CAN_MAX }; return S.can.w; }
+function refillCan() { if (!S.can) S.can = { w: 0 }; const had = S.can.w; S.can.w = CFG.CAN_MAX; mark(); return CFG.CAN_MAX - had; }
 function shooPest(key, who) { const p = S.plots[key]; if (!plotFlags(p).pest) return false; p.pestDone = true; p.bonus = (p.bonus || 0) + 1; if (!who) { addXP(1); sfx('pest'); } mark(); return true; }
 function harvestPlot(key) {
-  const p = S.plots[key]; if (plotState(p) !== 'ripe') return null;
-  const c = CROPS[p.crop]; let n = c.yield + (p.bonus || 0); if (weekendBuff() === 'x2') n *= 2;
+  const p = S.plots[key]; const t = now(); if (plotState(p, t) !== 'ripe') return null;
+  const c = CROPS[p.crop]; const q = plotQuality(p, t); const Q = QUALITY[q];
+  let n = c.yield + (p.bonus || 0) + (Q.bonus ? Math.ceil(c.yield * Q.bonus) : 0); if (weekendBuff() === 'x2') n *= 2;
   if (!store(p.crop, n)) return 'full';
-  addXP(c.xp); stat('harvest'); sfx('harvest');
-  const crop = p.crop; S.plots[key] = { crop: null }; mark();
-  return { crop, n };
+  addXP(Math.round(c.xp * (Q.xp || 1))); stat('harvest'); if (q === 2) stat('harvest_gold'); sfx('harvest');
+  const crop = p.crop; const h = (p.h || 0) + 1;
+  let regrow = false;
+  if (c.regrow && h < c.regrow) { // ผักเก็บซ้ำได้: ต้นยังอยู่ กลับไปขั้นต้นโต
+    regrow = true; plotAdvance(p, t);
+    Object.assign(p, { h, prog: p.dur * (1 - CFG.REGROW_FRAC), at: t, dryMs: 0, bonus: 0, comp: false, pestAt: null, pestDone: false });
+  } else S.plots[key] = newPlot(p);
+  mark();
+  return { crop, n, q, regrow, left: regrow ? c.regrow - h : 0 };
 }
 function speedCost(ms) { return ms <= CFG.FREE_SPEEDUP_MS ? 0 : Math.ceil(ms / CFG.SPEEDUP_PER_AMBER_MS); }
 function speedPlot(key) {
   const p = S.plots[key]; if (plotState(p) !== 'grow') return false;
-  const cost = speedCost(p.readyAt - now()); if (!pay({ amber: cost })) return false;
-  p.readyAt = now(); mark(); return true;
+  const cost = speedCost(plotReadyAt(p) - now()); if (!pay({ amber: cost })) return false;
+  plotAdvance(p); p.prog = p.dur; mark(); return true;
 }
 function useCompost(key) {
   const p = S.plots[key]; if (plotState(p) !== 'grow' || !(S.inv.compost > 0)) return false;
-  S.inv.compost--; if (!S.inv.compost) delete S.inv.compost; p.readyAt -= (p.readyAt - now()) * 0.5; mark(); return true;
+  S.inv.compost--; if (!S.inv.compost) delete S.inv.compost;
+  plotAdvance(p); p.prog += (p.dur - p.prog) * 0.5; p.comp = true; mark(); return true;
+}
+// ---------- ฝน (ตกพร้อมกันทั้งโลก กำหนดจากเวลาจริง) ----------
+function rainHash(b) { let x = (b * 2654435761) >>> 0; x ^= x >>> 15; x = Math.imul(x, 2246822519) >>> 0; x ^= x >>> 13; return (x >>> 0) / 4294967296; }
+function isRainBlock(b) { return rainHash(b + 7919) < CFG.RAIN_CHANCE; }
+function rainNow(t = now()) { return isRainBlock(Math.floor(t / CFG.RAIN_BLOCK_MS)); }
+function rainEnds(t = now()) { return (Math.floor(t / CFG.RAIN_BLOCK_MS) + 1) * CFG.RAIN_BLOCK_MS; }
+function nextRain(t = now()) { let b = Math.floor(t / CFG.RAIN_BLOCK_MS) + 1; for (let i = 0; i < 40; i++, b++) if (isRainBlock(b)) return b * CFG.RAIN_BLOCK_MS; return null; }
+// ไล่ย้อนช่วงฝนที่ผ่านมาตั้งแต่เช็คล่าสุด (รวมตอนปิดเกม) แล้วรดน้ำให้ทุกแปลง
+function applyRain(t = now()) {
+  const from = Math.max(S.rainChk || t, t - 3 * DAY); const B = CFG.RAIN_BLOCK_MS; let rained = false;
+  for (let b = Math.floor(from / B); b <= Math.floor(t / B); b++) {
+    if (!isRainBlock(b)) continue;
+    const bs = Math.max(b * B, from), be = (b + 1) * B; if (bs > t) continue;
+    for (const p of Object.values(S.plots)) {
+      const until = be + wetMs(p) * 0.5; // ฝนหยุดแล้ว ดินยังชุ่มต่ออีกพักหนึ่ง
+      if ((p.wetUntil || 0) >= until) continue;
+      const ts = Math.max(bs, p.at || bs);
+      if (p.crop && p.germ) plotAdvance(p, ts);
+      if (p.crop && !p.germ) germinate(p, ts);
+      p.wetUntil = until; rained = true;
+    }
+  }
+  S.rainChk = t;
+  if (rainNow(t) && S.can && S.can.w < CFG.CAN_MAX) { S.can.w = CFG.CAN_MAX; rained = true; }
+  if (rained) mark();
+  return rained;
+}
+// แปลงเซฟเก่า (readyAt/startAt) มาเป็นระบบใหม่
+function migratePlots(s) {
+  const t = now();
+  for (const [k, p] of Object.entries(s.plots || {})) {
+    if (!p.crop) continue;
+    if ('readyAt' in p || 'startAt' in p) {
+      const dur = p.dur || CROPS[p.crop].ms;
+      const np = { crop: p.crop, dur, prog: 0, at: t, germ: false, wetUntil: 0, dryMs: 0, bonus: p.bonus || 0, h: 0, pestAt: p.pestAt || null, pestDone: !!p.pestDone };
+      if (p.readyAt) { np.germ = true; np.prog = clamp(dur - (p.readyAt - t), 0, dur); np.wetUntil = t + wetMs(np); }
+      s.plots[k] = np;
+    }
+  }
+  if (!s.can) s.can = { w: CFG.CAN_MAX };
 }
 
 // ---------- สัตว์ ----------

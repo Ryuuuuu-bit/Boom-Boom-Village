@@ -14,7 +14,7 @@ KEEP = {'crop_pumpkin_0_soil', 'crop_pumpkin_1_sprout', 'crop_pumpkin_2_growing'
 for f in sorted(glob.glob(os.path.join(A, 'sprites', '*.png'))):
     k = os.path.basename(f)[:-4]
     im = Image.open(f).convert('RGBA')
-    if k not in KEEP:
+    if k not in KEEP and not k.startswith('stg_') and k != 'soil_dry':
         bb = im.getbbox()
         if bb: im = im.crop(bb)
     out['images'][k] = uri(im)

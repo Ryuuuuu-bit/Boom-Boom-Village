@@ -8,8 +8,14 @@ const CFG = {
   START_W: 24, START_H: 16,       // ที่ดินเริ่มต้น
   START: { shells: 30, amber: 10, feathers: 0, seeds: { pumpkin: 5 } },
   TUTORIAL_GROW_MS: 30 * 1000,    // พืชในบทสอนโตใน 30 วินาที
-  DRY_CHANCE: 0.3, PEST_CHANCE: 0.2, DRY_MIN_MS: 10 * MIN, // ดินแห้ง/หนอน เกิดกับพืชที่โต >= 10 นาที
-  DRY_CUT: 0.10,                  // รดน้ำดินแห้ง ลดเวลาที่เหลือ 10%
+  PEST_CHANCE: 0.2, DRY_MIN_MS: 10 * MIN, // หนอน เกิดกับพืชที่โต >= 10 นาที
+  // ---- ระบบดินชื้น (แบบเกมฟาร์มจริงจัง) ----
+  WET_FRAC: 0.55,                 // รดน้ำ 1 ครั้ง ดินชุ่มนาน 55% ของเวลาโตทั้งหมด (พืชส่วนใหญ่ต้องรด 2 รอบ)
+  WET_MIN_MS: 90 * 1000, WET_MAX_MS: 8 * HOUR, WET_EMPTY_MS: 30 * MIN,
+  DRY_RATE: 0.3,                  // ดินแห้ง พืชโตช้าลงเหลือ 30% (ไม่ตาย ไม่เหี่ยว)
+  CAN_MAX: 20,                    // บัวรดน้ำจุ 20 ครั้ง เติมที่บ่อน้ำ/แม่น้ำ/ตอนฝนตก
+  RAIN_BLOCK_MS: 3 * HOUR, RAIN_CHANCE: 0.2, // ทุก 3 ชม. มีโอกาสฝนตก 20% (ทุกคนเห็นฝนตกพร้อมกัน)
+  REGROW_FRAC: 0.45,              // ผักเก็บซ้ำได้ โตรอบใหม่ใช้เวลา 45%
   SPEEDUP_PER_AMBER_MS: 15 * MIN, FREE_SPEEDUP_MS: 2 * MIN,
   STORAGE_BASE: 50, STORAGE_STEP: 25,
   HELP_PER_FRIEND: 5, HELP_PER_DAY: 20,
@@ -64,13 +70,14 @@ const STORED_CATS = ['crop', 'animal', 'fruit', 'goods']; // นับรวม�
 const CROPS = {
   millet:  { n: 'ข้าวฟ่าง', lv: 1, ms: 2 * MIN, seed: 2, yield: 2, xp: 1, img: 'crop_millet' },
   pumpkin: { n: 'ฟักทอง', lv: 1, ms: 10 * MIN, seed: 5, yield: 1, xp: 3, img: 'crop_pumpkin_3_ripe' },
-  corn:    { n: 'ข้าวโพดป่า', lv: 3, ms: 30 * MIN, seed: 8, yield: 2, xp: 5, img: 'crop_corn' },
+  corn:    { n: 'ข้าวโพดป่า', lv: 3, ms: 30 * MIN, seed: 8, yield: 2, xp: 5, img: 'crop_corn', regrow: 2 },
   taro:    { n: 'มันเผือกยักษ์', lv: 5, ms: 1 * HOUR, seed: 12, yield: 2, xp: 8, img: 'crop_taro' },
   melon:   { n: 'แตงโมลายหิน', lv: 8, ms: 4 * HOUR, seed: 25, yield: 2, xp: 20, img: 'crop_watermelon' },
-  chili:   { n: 'พริกไฟ', lv: 11, ms: 2 * HOUR, seed: 20, yield: 3, xp: 14, img: 'crop_chili' },
-  bean:    { n: 'ถั่วยักษ์', lv: 14, ms: 8 * HOUR, seed: 40, yield: 3, xp: 40, img: 'crop_bean' },
+  chili:   { n: 'พริกไฟ', lv: 11, ms: 2 * HOUR, seed: 20, yield: 3, xp: 14, img: 'crop_chili', regrow: 3 },
+  bean:    { n: 'ถั่วยักษ์', lv: 14, ms: 8 * HOUR, seed: 40, yield: 3, xp: 40, img: 'crop_bean', regrow: 3 },
   rice:    { n: 'ข้าวเหนียวโบราณ', lv: 18, ms: 12 * HOUR, seed: 60, yield: 4, xp: 60, img: 'crop_rice' },
 };
+const QUALITY = [{ n: 'ธรรมดา', star: '' }, { n: 'เกรดเงิน', star: '⭐', bonus: 0.25, xp: 1.5 }, { n: 'เกรดทอง', star: '🌟', bonus: 0.5, xp: 2 }];
 const PLOTS_BY_LEVEL = (lv) => Math.min(60, 6 + (lv - 1) * 3);
 
 // ---------- สัตว์ (GDD 3.2) ----------

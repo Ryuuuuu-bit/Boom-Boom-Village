@@ -12,6 +12,7 @@ function setTool(t) {
   TOOL = t; document.querySelectorAll('#tools button').forEach((b) => b.classList.toggle('on', b.dataset.tool === t));
   if (t === 'move') toast('✋ คลิกสิ่งก่อสร้างหรือของแต่งที่ต้องการย้าย');
   if (t === 'hoe') toast('⛏️ คลิก/ลากบนหญ้าเพื่อไถดิน · คลิกแปลงว่างเพื่อถมคืน');
+  if (t === 'can') toast(`💧 คลิก/ลากบนแปลงเพื่อรดน้ำ (เหลือ ${canLeft()}/${CFG.CAN_MAX}) · น้ำหมดให้คลิกแม่น้ำหรือบ่อน้ำเพื่อเติม · ฝนตกจะรดให้ทุกแปลง`);
   if (t === 'seed') toast(`🌱 คลิกแปลงว่างเพื่อปลูก${CROPS[S.seedPick].n} · เก็บแล้วปลูกต่ออัตโนมัติ · กดปุ่มเมล็ดอีกครั้งเพื่อเปลี่ยนชนิด`);
 }
 function uiBlocking() { return !$('modal').classList.contains('hidden') || !$('talk').classList.contains('hidden') || !$('loading').classList.contains('hidden'); }
@@ -103,6 +104,8 @@ function hud() {
   $('q-daily').innerHTML = '<b>📅 วันนี้</b>' + S.daily.quests.map((q) => `<div class="${q.done ? 'done' : ''}"><span>${q.t}</span><span>${q.prog}/${q.n}</span></div>`).join('');
   // ป้าย
   const chips = [];
+  if (rainNow()) chips.push(`<div class="chip rain" title="ฝนตก! รดน้ำให้ทุกแปลงและเติมบัวให้เต็มแล้ว">🌧️ ฝนตก อีก ${fmtDur(rainEnds() - now())}</div>`);
+  else { const nr = nextRain(); chips.push(`<div class="chip" title="พยากรณ์อากาศ: ฝนจะตกครั้งหน้า (รดน้ำให้ทุกแปลงฟรี)">☀️ ฝนครั้งหน้า ${nr ? fmtDur(nr - now()) : '-'}</div>`); }
   const wb = weekendInfo(); if (wb) chips.push(`<div class="chip" data-p="help" title="${wb.n}: ${wb.d}">🎉 ${wb.n}</div>`);
   if (ev) chips.push(`<div class="chip ev" data-p="event" title="เทศกาล${ev.n}">🛶 ถึง ${new Date(ev.end).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })}</div>`);
   if (shielded()) chips.push(`<div class="chip sh" data-p="settings" title="${S.peaceful ? 'โหมดหมู่บ้านสงบ' : 'มีโล่กันแกล้ง'}">🛡️ ${S.peaceful ? 'สงบ' : fmtDur(S.counters.shieldUntil - now())}</div>`);
@@ -114,6 +117,8 @@ function hud() {
   badge('b-login', loginStatus().claimable ? '!' : 0);
   ordersTick(); badge('b-orders', S.orders.filter((o) => !o.readyAt && canAfford(o.items)).length);
   badge('b-friends', BOTS.filter((b) => helpLeft(b) > 0 && S.bots[b.id].giftDay !== dayKey()).length);
+  // บัวรดน้ำ
+  const cw = canLeft(); $('can-n').textContent = `บัว ${cw}/${CFG.CAN_MAX}`; $('canbtn').classList.toggle('low', cw <= 3);
   // เมล็ด
   const c = CROPS[S.seedPick] || CROPS.pumpkin; $('seed-ic').innerHTML = IMG(ITEMS[S.seedPick].icon, '') || '🌱'; $('seed-n').textContent = c.n + ((S.seeds[S.seedPick] || 0) ? ` (${S.seeds[S.seedPick]})` : '');
   // กลางคืน
@@ -205,20 +210,31 @@ PANELS.seeds = () => {
   let html = '<div class="grid">';
   for (const [k, c] of Object.entries(CROPS)) {
     const lock = c.lv > S.level;
-    html += `<div class="card ${lock ? 'lock' : ''}" ${S.seedPick === k ? 'style="border-color:#f2b84b"' : ''}><div class="pic">${IMG(ITEMS[k].icon)}</div><div class="nm">${c.n}</div>
-      <div class="ds">โต ${fmtDur(c.ms)} · ได้ ${c.yield} · ขาย ${iconHTML('shells')}${ITEMS[k].price}</div>
+    html += `<div class="card ${lock ? 'lock' : ''}" ${S.seedPick === k ? 'style="border-color:#f2b84b"' : ''}><div class="pic">${IMG(ITEMS[k].icon)}</div><div class="nm">${c.n}${c.regrow ? ' 🌿' : ''}</div>
+      <div class="ds">โต ${fmtDur(c.ms)} · ได้ ${c.yield}${c.regrow ? ` x${c.regrow} รอบ` : ''} · ขาย ${iconHTML('shells')}${ITEMS[k].price}</div>
       ${lock ? `<div class="muted">🔒 Lv ${c.lv}</div>` : `<button class="btn green sm" data-a="pick" data-v="${k}">${(S.seeds[k] || 0) ? `เมล็ดฟรี ${S.seeds[k]}` : `${iconHTML('shells')}${c.seed}/แปลง`}</button>`}</div>`;
   }
-  return { title: '🌱 เลือกเมล็ดที่จะปลูก', html: html + '</div><p class="muted">💡 ปลูกให้ตรงกับเวลาที่จะกลับมาเล่น ผักไม่มีวันเหี่ยว</p>', acts: { pick: (k) => { S.seedPick = k; mark(); closePanel(); hud(); setTool('seed'); } } };
+  return { title: '🌱 เลือกเมล็ดที่จะปลูก', html: html + '</div><p class="muted">💡 หยอดเมล็ดแล้วต้องรดน้ำถึงจะงอก · ดินชุ่มโตเต็มสปีด ดินแห้งโตช้าลง (แต่ไม่ตาย) · 🌿 = เก็บซ้ำได้</p>', acts: { pick: (k) => { S.seedPick = k; mark(); closePanel(); hud(); setTool('seed'); } } };
 };
 // --- ข้อมูลแปลงที่กำลังโต ---
 PANELS.plot = (key) => {
   const p = S.plots[key]; if (!p || plotState(p) !== 'grow') return null;
-  const c = CROPS[p.crop]; const left = p.readyAt - now(); const cost = speedCost(left); const f = 1 - left / (p.readyAt - p.startAt);
-  return { title: `${IMG(ITEMS[p.crop].icon)} ${c.n}`, narrow: true, live: true, html: `<div class="pbar"><div style="width:${f * 100}%"></div></div><p>อีก <b>${fmtDur(left)}</b> จะสุก ${p.bonus ? `· ไล่หนอนแล้ว ได้เพิ่ม +${p.bonus}` : ''}</p>
-    <div class="center" style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap"><button class="btn gold" data-a="speed">${cost ? `⚡ เร่งให้สุกเลย ${iconHTML('amber')}${cost}` : '⚡ เร่งฟรี!'}</button>
-    ${S.inv.compost ? `<button class="btn green" data-a="compost">🍂 ใส่ปุ๋ย (ลดเวลาครึ่งหนึ่ง) มี ${S.inv.compost}</button>` : ''}</div>`,
-    acts: { speed: () => { if (!speedPlot(key)) { toast('อำพันไม่พอ', 'bad'); sfx('error'); return; } sfx('amber'); closePanel(); }, compost: () => { useCompost(key); sfx('plant'); renderPanel(); } } };
+  const t = now(); const c = CROPS[p.crop]; const ra = plotReadyAt(p, t); const left = ra - t; const cost = speedCost(left); const f = plotFrac(p, t);
+  const fl = plotFlags(p, t); const q = plotQuality(p, t); const Q = QUALITY[q];
+  const stages = [0, 1, 2, 3, 4].map((i) => `<img src="${A.images['stg_' + p.crop + '_' + i]}" style="width:40px;height:40px;image-rendering:pixelated;${i === plotStage(p, t) ? 'background:#ffe9a8;border-radius:8px;outline:2px solid #f2b84b' : 'opacity:.45'}">`).join('');
+  const wet = fl.wet ? `💧 ดินชุ่ม อีก <b>${fmtDur(p.wetUntil - t)}</b> จะแห้ง` : `🏜️ <b>ดินแห้ง!</b> โตช้าลงเหลือ ${Math.round(CFG.DRY_RATE * 100)}% · รดน้ำด่วน`;
+  const regrow = c.regrow ? `<div class="muted">🌿 ผักเก็บซ้ำได้ ${c.regrow} ครั้ง (เก็บไปแล้ว ${p.h || 0})</div>` : '';
+  return { title: `${IMG(ITEMS[p.crop].icon)} ${c.n}`, narrow: true, live: true, html: `<div style="display:flex;justify-content:center;gap:2px;margin-bottom:6px">${stages}</div>
+    <div class="pbar"><div style="width:${f * 100}%"></div></div><p>อีกประมาณ <b>${fmtDur(left)}</b> จะสุก ${p.bonus ? `· ไล่หนอนแล้ว ได้เพิ่ม +${p.bonus}` : ''}</p>
+    <p style="margin:4px 0">${wet}</p>
+    <p style="margin:4px 0">คุณภาพตอนนี้: <b>${Q.star || '▫️'} ${Q.n}</b> <span class="muted">(ดูแลดี ไม่ปล่อยดินแห้ง = เกรดทอง ได้ผลผลิต/XP มากขึ้น)</span></p>${regrow}
+    <div class="center" style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
+    ${!fl.wet ? `<button class="btn blue" data-a="water">💧 รดน้ำ (บัว ${canLeft()}/${CFG.CAN_MAX})</button>` : ''}
+    <button class="btn gold" data-a="speed">${cost ? `⚡ เร่งให้สุกเลย ${iconHTML('amber')}${cost}` : '⚡ เร่งฟรี!'}</button>
+    ${S.inv.compost ? `<button class="btn green" data-a="compost">🍂 ใส่ปุ๋ย (ลดเวลาครึ่งหนึ่ง +เกรด) มี ${S.inv.compost}</button>` : ''}</div>`,
+    acts: { speed: () => { if (!speedPlot(key)) { toast('อำพันไม่พอ', 'bad'); sfx('error'); return; } sfx('amber'); closePanel(); },
+      compost: () => { useCompost(key); sfx('plant'); renderPanel(); },
+      water: () => { closePanel(); if (SCENE) SCENE.clickCell(...key.split(',').map(Number)); } } };
 };
 // --- ตลาด ---
 PANELS.market = (arg, P) => {
@@ -438,8 +454,14 @@ PANELS.settings = () => {
 // --- วิธีเล่น ---
 PANELS.help = () => ({ title: '❓ วิธีเล่น Boom Boom Village', html: `
   <div class="section">🎮 การควบคุม</div>
-  <div class="kv"><span>เดิน</span><b>WASD / ลูกศร หรือคลิกที่พื้น</b><span>ใช้งาน (ไถ ปลูก รดน้ำ เก็บ)</span><b>Space / E หรือคลิกที่ของ</b><span>ทำหลายแปลงรวด</span><b>กดเมาส์ค้างแล้วลากผ่านแปลง</b><span>เปลี่ยนเครื่องมือ</span><b>1 มือ · 2 จอบ · 3 เมล็ด · 4 ย้าย</b><span>ซูม</span><b>ลูกกลิ้งเมาส์</b><span>หมุนของตอนวาง</span><b>R</b><span>ยกเลิก / ปิดหน้าต่าง</span><b>Esc</b></div>
-  <div class="section">🌾 ปลูกผัก</div><p>ไถดิน → ปลูก → <b>รดน้ำครั้งเดียว</b> → รอ → เก็บ ระหว่างโตบางทีดินแห้ง (💧) หรือมีหนอน (🐛) แค่รดน้ำ/ไล่หนอนก็ได้โบนัส ผักไม่มีวันเหี่ยวตาย</p>
+  <div class="kv"><span>เดิน</span><b>WASD / ลูกศร หรือคลิกที่พื้น</b><span>ใช้งาน (ไถ ปลูก รดน้ำ เก็บ)</span><b>Space / E หรือคลิกที่ของ</b><span>ทำหลายแปลงรวด</span><b>กดเมาส์ค้างแล้วลากผ่านแปลง</b><span>เปลี่ยนเครื่องมือ</span><b>1 มือ · 2 จอบ · 3 บัวรดน้ำ · 4 เมล็ด · 5 ย้าย</b><span>ซูม</span><b>ลูกกลิ้งเมาส์</b><span>หมุนของตอนวาง</span><b>R</b><span>ยกเลิก / ปิดหน้าต่าง</span><b>Esc</b></div>
+  <div class="section">🌾 ปลูกผัก</div><p>ไถดิน → หยอดเมล็ด → <b>รดน้ำให้เมล็ดงอก</b> → ต้นโต 5 ขั้น (เมล็ด ต้นอ่อน ต้นเล็ก ต้นโต สุก) → เก็บ</p>
+  <ul><li>💧 <b>ดินชุ่ม</b> (สีเข้ม) ผักโตเต็มสปีด พอดินแห้ง (มีรอยแตก) ผักโตช้าลงเหลือ 30% รดน้ำใหม่ได้เลย ผักส่วนใหญ่ต้องรด 2 รอบ</li>
+  <li>🪣 <b>บัวรดน้ำ</b> จุ ${CFG.CAN_MAX} ครั้ง หมดแล้วเดินไปคลิกที่แม่น้ำหรือบ่อน้ำเพื่อเติม</li>
+  <li>🌧️ <b>ฝนตก</b> (ทุกคนเห็นพร้อมกัน) รดน้ำให้ทุกแปลงและเติมบัวให้ฟรี ดูพยากรณ์ได้ที่ป้ายซ้ายบน</li>
+  <li>⭐ <b>คุณภาพ</b>: ดูแลดีไม่ปล่อยดินแห้ง ไล่หนอน ใส่ปุ๋ย ได้เกรดเงิน/ทอง ผลผลิตและ XP เพิ่ม</li>
+  <li>🌿 ข้าวโพด พริก ถั่ว <b>เก็บซ้ำได้</b> ต้นไม่ต้องปลูกใหม่</li>
+  <li>ผักไม่มีวันเหี่ยวตาย ปล่อยไว้ก็แค่โตช้าลง</li></ul>
   <div class="section">🐾 สัตว์และโรงผลิต</div><p>ให้อาหารสัตว์ในคอก รอแล้วเก็บผลผลิต เอาไปเข้าเตาหิน/ครก/กี่ทอผ้า ทำของราคาแพงขึ้น</p>
   <div class="section">📋 หาเงิน</div><p>ขายที่ตลาด หรือส่งคำสั่งซื้อที่ต้นไม้คำขอ (ได้มากกว่า) ทำภารกิจรายวันรับหีบสมบัติ</p>
   <div class="section">👥 เพื่อนบ้าน ช่วยหรือแกล้ง</div><p>ปูปู้ น้องมะลิ และพี่โต จะแวะมาช่วยหรือแกล้งเป็นระยะ เราไปเยี่ยมช่วยได้ขนนกทอง หรือแกล้งได้วันละ 3 ครั้ง รอยแกล้งไม่ทำให้ของเสียหาย <b>กวาดแล้วได้รางวัลเสมอ</b> โดนครบ 3 ครั้งได้โล่ถึงเที่ยงคืน และมีห่านยามช่วยจับ</p>

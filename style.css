@@ -513,3 +513,5 @@ body:has(#modal:not(.hidden)) #toasts { top: auto; bottom: 18px; }
 #loading .snd-btn:hover { background: rgba(90,50,20,.7); }
 /* v7: chibi HD images render smooth */
 #talk-face, .icb.hd, img.hd { image-rendering: auto; }
+.fcode { font-size: 20px; letter-spacing: 2px; background: #ffe066; color: #5a2c00; padding: 1px 8px; border-radius: 8px; border: 2px solid var(--line); }
+.fr-av { width: 48px; height: 48px; flex: none; border-radius: 50%; background: linear-gradient(#9be35f, #48a92c); border: 3px solid var(--line); color: #fff; font-weight: 800; font-size: 22px; display: flex; align-items: center; justify-content: center; text-shadow: 0 2px 0 rgba(0,0,0,.3); }

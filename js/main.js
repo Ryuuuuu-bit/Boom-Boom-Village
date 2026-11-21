@@ -2,7 +2,7 @@
 'use strict';
 // S ถูกตั้งหลังเข้าสู่ระบบ (ดู js/auth.js)
 let firstRun = false, awaySince = 0;
-const authReady = authBoot().then(() => { firstRun = !S.welcomed; awaySince = S.lastSeen; migratePlots(S); applyRain(); dailyReset(); if (AUTH.migrated) setTimeout(() => toast('☁️ ย้ายหมู่บ้านเดิมในเครื่องนี้ขึ้นบัญชีแล้ว', 'good'), 1500); });
+const authReady = authBoot().then(() => { firstRun = !S.welcomed; awaySince = S.lastSeen; migratePlots(S); applyRain(); dailyReset(); friendsBoot(); if (AUTH.migrated) setTimeout(() => toast('☁️ ย้ายหมู่บ้านเดิมในเครื่องนี้ขึ้นบัญชีแล้ว', 'good'), 1500); });
 
 // ---------- เหตุการณ์ ----------
 let pendingLevel = [];
@@ -20,8 +20,10 @@ BUS.on('refresh', () => { if (SCENE && SCENE.home) SCENE.refreshPlots(); });
 function flushLevel() { if (!pendingLevel.length) return; if (uiBlocking()) { setTimeout(flushLevel, 1500); return; } const [lv, u] = pendingLevel.pop(); pendingLevel = []; showLevelUp(lv, u); }
 
 // ---------- เดินทาง ----------
-function travel(loc) {
-  if (!SCENE || SCENE.loc === loc) return;
+let travelling = false;
+async function travel(loc) {
+  if (!SCENE || SCENE.loc === loc || travelling) return;
+  if (String(loc).startsWith('u:')) { travelling = true; const ok = await visitReal(loc); travelling = false; if (!ok) return; }
   closePanel(); SCENE.stopPlacing(true); sfx('ui');
   SCENE.cameras.main.fadeOut(250);
   SCENE.time.delayedCall(260, () => SCENE.scene.restart({ loc }));

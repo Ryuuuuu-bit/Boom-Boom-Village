@@ -56,7 +56,11 @@ class World extends Phaser.Scene {
     SCENE = this; applyHD(this);
     this.home = this.loc === 'home';
     this.bot = this.home ? null : botById(this.loc);
-    this.W = this.home ? CFG.MAP_W : FRIEND_W; this.H = this.home ? CFG.MAP_H : FRIEND_H;
+    // หมู่บ้านเพื่อนจริง: ใช้ข้อมูลหมู่บ้านจริงของเพื่อน (จากเซิร์ฟเวอร์)
+    this.real = !this.home && String(this.loc).startsWith('u:') && REAL_VISIT ? REAL_VISIT : null;
+    this.V = this.home ? S : this.real ? this.real.village : null;
+    if (this.real) this.fobjs = this.V.objects.filter((o) => BUILDS[o.type]).map((o) => ({ ...o, data: { ...(o.data || {}) } }));
+    this.W = this.home || this.real ? CFG.MAP_W : FRIEND_W; this.H = this.home || this.real ? CFG.MAP_H : FRIEND_H;
     this.cameras.main.setBackgroundColor('#3f7a2c').fadeIn(300);
     this.makeAnims();
     this.buildGrid();
@@ -64,7 +68,7 @@ class World extends Phaser.Scene {
     for (let y = 0; y < this.H; y++) { this.tiles.push([]); for (let x = 0; x < this.W; x++) this.tiles[y].push(this.add.image(x * T, y * T, 'ts_dirt', 0).setOrigin(0).setDepth(0)); }
     for (let y = 0; y < this.H; y++) for (let x = 0; x < this.W; x++) this.paintTile(x, y);
     this.bakeGround(0, 0, this.W - 1, this.H - 1);
-    this.seed = this.home ? 1 : (this.loc.charCodeAt(0) || 3);
+    this.seed = this.home ? 1 : this.real ? 1 + ((+this.bot.uid || 3) % 97) : (this.loc.charCodeAt(0) || 3);
     this.deco = {}; this.forest = [];
     for (let y = 0; y < this.H; y++) for (let x = 0; x < this.W; x++) this.scatterAt(x, y);
     this.water = this.add.graphics().setDepth(0.5); this.waterT = 0;
@@ -88,7 +92,7 @@ class World extends Phaser.Scene {
     this.ambience();
 
     // ผู้เล่น
-    const sp = this.home ? { x: 12.5 * T, y: 9.2 * T } : { x: 1.5 * T, y: 9.2 * T };
+    const sp = this.home || this.real ? { x: 12.5 * T, y: 9.2 * T } : { x: 1.5 * T, y: 9.2 * T };
     this.player = this.add.sprite(sp.x, sp.y, 'villager', 30).setOrigin(0.5, 46 / 48);
     this.shadow = this.add.ellipse(0, 0, 16, 6, 0x1a1816, 0.28).setDepth(2);
     this.dir = 'south'; this.player.play('idle-south');
@@ -123,14 +127,15 @@ class World extends Phaser.Scene {
     const rect = (x, y, w, h, v) => { for (let j = y; j < y + h; j++) for (let i = x; i < x + w; i++) if (g[j] && i >= 0 && i < this.W) g[j][i] = v; };
     rect(0, 0, this.W, 2, 'w');           // แม่น้ำด้านบน
     // ทางเดินดินเส้นเล็กคดเคี้ยว (ช่องเดียว แต่พื้นวาดออกมากว้างราว 2 ช่อง)
-    const pathY = (x) => (this.home ? (x < 13 ? 8 : x < 25 ? 9 : 8) : (x < 10 ? 8 : x < 18 ? 9 : 8));
+    const homeLike = this.home || this.real; const V = this.V;
+    const pathY = (x) => (homeLike ? (x < 13 ? 8 : x < 25 ? 9 : 8) : (x < 10 ? 8 : x < 18 ? 9 : 8));
     for (let x = 0; x < this.W; x++) { const y = pathY(x); g[y][x] = 'p'; if (x > 0 && pathY(x - 1) !== y) g[pathY(x - 1)][x] = 'p'; }
-    if (this.home) {
+    if (homeLike) {
       rect(3, 6, 1, 2, 'p'); rect(10, 7, 1, 1, 'p'); rect(16, 7, 1, 2, 'p'); rect(19, 7, 1, 2, 'p');
       rect(11, 9, 1, 2, 'p'); rect(10, 11, 3, 2, 'p'); rect(11, 10, 1, 4, 'p'); rect(9, 12, 5, 1, 'p'); // ลานรอบกองไฟ (ทรงกลม)
       rect(30, 2, 5, 2, 'w'); rect(31, 4, 3, 1, 'w'); // บึง
-      for (const o of S.objects) if (o.type === 'pen') rect(o.x, o.y, 5, 4, 'd');
-      for (const key of Object.keys(S.plots)) { const [x, y] = key.split(',').map(Number); g[y][x] = 's'; }
+      for (const o of V.objects) if (o.type === 'pen') rect(o.x, o.y, 5, 4, 'd');
+      for (const key of Object.keys(V.plots)) { const [x, y] = key.split(',').map(Number); if (g[y]) g[y][x] = 's'; }
     } else {
       rect(4, 6, 1, 2, 'p'); rect(9, 10, 8, 4, 'p'); rect(15, 11, 5, 4, 'd'); rect(4, 12, 6, 2, 's'); rect(23, 6, 1, 2, 'p');
     }
@@ -285,7 +290,7 @@ class World extends Phaser.Scene {
     let key = null, ox = 0.2 + hsh(x, y, 3) * 0.6, oy = 0.6 + hsh(x, y, 4) * 0.35;
     if (c === 'g') {
       if (r > 0.16 || this.nearPath(x, y)) return;
-      if (this.home && (objAtCell(x, y) || objAtCell(x, y + 1) || objAtCell(x, y + 2))) return;
+      if ((this.home || this.real) && (this.objAtCell(x, y) || this.objAtCell(x, y + 1) || this.objAtCell(x, y + 2))) return;
       key = r2 < 0.42 ? pick('sc_tuft', r2 / 0.42) : r2 < 0.8 ? pick('sc_flower', (r2 - 0.42) / 0.38) : r2 < 0.88 ? pick('sc_stone', (r2 - 0.8) / 0.08) : r2 < 0.93 ? pick('sc_mush', (r2 - 0.88) / 0.05) : pick('sc_leafy', (r2 - 0.93) / 0.07);
     } else if (c === 'w') {
       if (this.cell(x, y + 1) === 'g' && r < 0.3) { key = pick('sc_reed', r2); oy = 1.05; }
@@ -297,6 +302,11 @@ class World extends Phaser.Scene {
     else if (/lily/.test(key)) this.tweens.add({ targets: img, y: img.y + 1.5, duration: 1600 + hsh(x, y, 7) * 900, yoyo: true, repeat: -1, ease: 'Sine.inOut', delay: hsh(x, y, 8) * 1500 });
   }
   forestZone(x, y) {
+    if (this.real) {
+      const o = this.V.owned;
+      if (x < o.w && y < o.h + 1) return false;
+      return !this.objAtCell(x, y) && !this.objAtCell(x, y - 1);
+    }
     if (this.home) {
       if (this.owned(x, y)) return false;
       if (x < S.owned.w && y < S.owned.h + 1) return false;
@@ -425,7 +435,7 @@ class World extends Phaser.Scene {
     // 5) ผีเสื้อ
     if (this.home || true) {
       this.bflies = [];
-      const ow = (this.home ? S.owned.w : this.W) * T, oh = (this.home ? S.owned.h : this.H) * T;
+      const ow = (this.home || this.real ? this.V.owned.w : this.W) * T, oh = (this.home || this.real ? this.V.owned.h : this.H) * T;
       const cols = [0xffffff, 0xffb3e0, 0x9fd8ff, 0xffffff, 0xc8f59a];
       for (let i = 0; i < 5; i++) {
         const b = this.add.image(Math.random() * ow, 3 * T + Math.random() * (oh - 4 * T), 'bfly').setDepth(9040).setScale(0.9).setTint(cols[i]);
@@ -721,7 +731,7 @@ class World extends Phaser.Scene {
     this.prankSpr.forEach((s) => s.destroy()); this.prankSpr = [];
     this.ents.forEach((e) => e.kind === 'boar' && e.sh && e.sh.destroy());
     this.ents = this.ents.filter((e) => e.kind !== 'boar');
-    const list = this.home ? S.pranksOnMe : (S.bots[this.bot.id].myPranks || []);
+    const list = this.home ? S.pranksOnMe : this.real ? this.V.pranksOnMe : (S.bots[this.bot.id].myPranks || []);
     for (const p of list) this.drawPrank(p);
   }
   drawPrank(p) {
@@ -766,6 +776,7 @@ class World extends Phaser.Scene {
 
   // ===== หมู่บ้านเพื่อน =====
   setupFriend() {
+    if (this.real) return this.setupReal();
     const b = this.bot; const v = botVillage(b);
     this.fobjs = friendLayout(b).map((o, i) => ({ ...o, id: o.id || 'f' + i, data: {} }));
     for (const o of this.fobjs) this.addObj(o);
@@ -800,10 +811,50 @@ class World extends Phaser.Scene {
     this.tweens.add({ targets: this.owner, scaleY: 1.04, duration: 900, yoyo: true, repeat: -1 });
     this.refreshPranks();
   }
+  // ===== หมู่บ้านเพื่อนจริง =====
+  setupReal() {
+    const b = this.bot; const V = this.V; const t = now();
+    for (const o of this.fobjs) this.addObj(o);
+    this.fplots = {};
+    for (const [key, p] of Object.entries(V.plots)) {
+      const [x, y] = key.split(',').map(Number);
+      const stage = plotStage(p, t); const fl = plotFlags(p, t);
+      const need = fl.dry ? 'water' : fl.pest ? 'pest' : null;
+      if (stage >= 0 && p.crop) {
+        const s = this.add.image((x + 0.5) * T, (y + 1) * T, 'stg_' + p.crop + '_' + Math.min(4, stage)).setOrigin(0.5, 1).setDepth((y + 1) * T - 3);
+        this.sway(s, 3, rnd(1700, 2400));
+        let ck = null;
+        if (need === 'water') { s.setTint(0xd8d0a0); ck = this.add.image((x + 0.5) * T, (y + 0.5) * T, 'soil_dry').setDepth(1.2).setAlpha(0.55); }
+        else if (fl.wet) this.fx.fillStyle(0x241206, 0.4).fillRect(x * T + 2, y * T + 3, T - 4, T - 5);
+        const pest = this.add.image((x + 0.7) * T, (y + 0.75) * T, 'pest_caterpillar').setScale(0.55).setDepth((y + 1) * T).setVisible(need === 'pest');
+        const bub = this.makeBubble((x + 0.5) * T, y * T + 4);
+        if (need === 'water') bub.set('w', 'ic_drop', null, 0xffe0b0); else if (need === 'pest') bub.set('p', null, '🐛', 0xffe0b0);
+        this.fplots[key] = { p: { need, key }, s, pest, bub, ck };
+      }
+    }
+    for (const a of V.animals) {
+      const pen = this.fobjs.find((o) => o.id === a.pen); const d = ANIMALS[a.kind]; if (!pen || !d) continue;
+      const r = this.penRect(pen);
+      const fa = { kind: a.kind, id: a.id, hungry: animalState(a, t) === 'hungry' };
+      const spr = this.add.image(rnd(r.x1, r.x2), rnd(r.y1, r.y2), d.img).setOrigin(0.5, 0.95).setInteractive({ useHandCursor: true });
+      const ent = { kind: 'fanimal', fa, spr, pen, tx: spr.x, ty: spr.y, wait: rnd(0.5, 2), bub: this.makeBubble(spr.x, spr.y - 26) };
+      if (fa.hungry) ent.bub.set('h', ITEMS[Object.keys(d.eat)[0]].icon, '?', 0xffe0b0);
+      spr.on('pointerdown', () => { this.uiClick = true; this.enqueue(Math.floor(spr.x / T), Math.floor(spr.y / T), () => this.friendFeed(ent)); });
+      this.ents.push(ent);
+    }
+    // เจ้าของหมู่บ้าน (ยืนหน้ากระท่อมหัวหน้าเผ่า)
+    const chief = this.fobjs.find((o) => o.type === 'chief') || { x: 2, y: 4 };
+    this.owner = this.add.sprite((chief.x + 1.5) * T + 30, (chief.y + 2.7) * T, 'villager', 30).setOrigin(0.5, 46 / 48).setDepth((chief.y + 2.7) * T).setTint(0xffe2c4).setInteractive({ useHandCursor: true });
+    this.ownerTag = this.add.text(this.owner.x, this.owner.y - 50, b.n, TXT(8, '#ffe9a8')).setOrigin(0.5, 1).setResolution(4).setDepth(9500);
+    this.owner.on('pointerdown', () => { this.uiClick = true; this.say(this.owner, pick(['สวัสดี! มาเที่ยวเหรอ', 'ช่วยรดน้ำให้หน่อยสิ 💧', 'อย่าแกล้งเยอะนะ 😤', 'ฮิฮิ'])); });
+    this.tweens.add({ targets: this.owner, scaleY: 1.04, duration: 900, yoyo: true, repeat: -1 });
+    this.refreshPranks();
+  }
   friendArrive() {
     const b = this.bot; const bs = S.bots[b.id];
     S.visited[b.id] = 1; stat('visit');
     if (bs.visitDay !== dayKey()) { bs.visitDay = dayKey(); stat('visit_uniq'); }
+    if (this.real) { this.time.delayedCall(700, () => this.say(this.owner, pick(['มาเยี่ยมเหรอ! 💛', 'ยินดีต้อนรับสู่หมู่บ้านของฉัน', 'ช่วยกันหน่อยนะ 🌱']))); friendBar(b); return; }
     this.time.delayedCall(700, () => this.say(this.owner, b.id === 'pupu' ? 'โย่! มาทำไมเนี่ย จะมาแกล้งใช่มั้ย 😏' : b.id === 'mali' ? 'ยินดีต้อนรับค่ะ 🌸' : 'มาแล้วเหรอ! นั่งก่อนสิ 💪'));
     friendBar(b);
   }
@@ -811,18 +862,32 @@ class World extends Phaser.Scene {
     const fp = this.fplots[key]; if (!fp || !fp.p.need) return false;
     const b = this.bot;
     if (helpLeft(b) <= 0) { toast(`วันนี้ช่วย${b.n}ครบโควตาแล้ว (${CFG.HELP_PER_FRIEND} ครั้ง/คน)`, 'bad'); sfx('error'); return true; }
-    const kind = fp.p.need; const r = doHelp(b, kind);
+    const kind = fp.p.need;
+    if (this.real) {
+      if (fp.busy) return true; fp.busy = true;
+      realAct(b, 'help', kind, { key }).then((res) => { fp.busy = false; if (res && this.scene.isActive()) { fp.p.need = kind; this.friendPlotDone(key, fp, kind, doHelp(b, kind)); } });
+      return true;
+    }
+    const r = doHelp(b, kind);
+    this.friendPlotDone(key, fp, kind, r); return true;
+  }
+  friendPlotDone(key, fp, kind, r) {
+    const b = this.bot;
     fp.p.need = null; fp.bub.set('', null, null); fp.pest.setVisible(false); mark();
     if (kind === 'water') { this.waterFX(key); fp.s.clearTint(); if (fp.ck) { fp.ck.destroy(); fp.ck = null; } const [px, py] = key.split(',').map(Number); this.fx.fillStyle(0x241206, 0.4).fillRect(px * T + 2, py * T + 3, T - 4, T - 5); }
     sfx(kind === 'water' ? 'water' : 'pest'); this.floatText(fp.s.x, fp.s.y - 18, kind === 'water' ? '💧 รดน้ำแล้ว' : '🐛 ไล่หนอนแล้ว');
-    toast(`💛 ช่วย${b.n}แล้ว ได้ ${r}`, 'good'); friendBar(b); hud();
+    toast(`💛 ช่วย${esc(b.n)}แล้ว ได้ ${r}`, 'good'); friendBar(b); hud();
     if (Math.random() < 0.3) this.say(this.owner, pick(['ขอบใจนะ!', 'น่ารักที่สุด 💛', 'เดี๋ยวไปช่วยคืนนะ']));
-    return true;
   }
   friendFeed(ent) {
     const b = this.bot;
     if (!ent.fa.hungry) { toast(`${ANIMALS[ent.fa.kind].n}ของ${b.n}อิ่มแล้ว`); return; }
     if (helpLeft(b) <= 0) { toast(`วันนี้ช่วย${b.n}ครบโควตาแล้ว`, 'bad'); sfx('error'); return; }
+    if (this.real) {
+      if (ent.busy) return; ent.busy = true;
+      realAct(b, 'help', 'feed', { animal: ent.fa.id }).then((res) => { ent.busy = false; if (res && this.scene.isActive()) { const r = doHelp(b, 'feed'); ent.fa.hungry = false; ent.bub.set('', null, null); sfx('eat'); this.floatText(ent.spr.x, ent.spr.y - 24, '😋 ง่ำ ๆ'); toast(`🍖 ให้อาหารสัตว์ของ${esc(b.n)} ได้ ${r}`, 'good'); friendBar(b); hud(); } });
+      return;
+    }
     const r = doHelp(b, 'feed'); ent.fa.hungry = false; mark(); ent.bub.set('', null, null); sfx('eat');
     this.floatText(ent.spr.x, ent.spr.y - 24, '😋 ง่ำ ๆ'); toast(`🍖 ให้อาหารสัตว์ของ${b.n} ได้ ${r}`, 'good'); friendBar(b); hud();
   }
@@ -831,6 +896,7 @@ class World extends Phaser.Scene {
     if (S.peaceful) { toast('เปิดโหมดหมู่บ้านสงบอยู่ แกล้งใครไม่ได้ (ปิดได้ที่กระท่อมหัวหน้าเผ่า)', 'bad'); return; }
     if (!(bs.revengeFree > 0) && prankLeft(b) <= 0) { toast(S.counters.pranks >= prankQuota() ? `วันนี้แกล้งครบ ${prankQuota()} ครั้งแล้ว พรุ่งนี้มาใหม่นะ` : `แกล้ง${b.n}ได้วันละ 1 ครั้ง`, 'bad'); sfx('error'); return; }
     if (PRANKS[kind].lv > S.level) { toast(`ปลดล็อกที่เลเวล ${PRANKS[kind].lv}`, 'bad'); return; }
+    if (this.real) return this.realPrank(kind);
     const opts = {};
     if (kind === 'mud') { opts.cells = []; for (let i = 0; i < 4; i++) opts.cells.push([rint(2, FRIEND_W - 3), rint(8, 9)]); sfx('mud'); }
     if (kind === 'leaves') { opts.cells = []; for (let i = 0; i < 6; i++) opts.cells.push([rint(9, 16), rint(10, 13)]); sfx('sweep'); }
@@ -843,6 +909,27 @@ class World extends Phaser.Scene {
     this.refreshPranks(); this.cameras.main.shake(180, 0.004);
     this.say(this.owner, pick({ pupu: ['เฮ้ย! เดี๋ยวเจอดี 😤', 'จำไว้เลยนะ!!', 'ฮ่า ๆ เก่งนี่'], mali: ['ว้าย! 😳', 'แกล้งกันทำไมคะ~', 'ฮึ่ม 🌸'], to: ['ฮ่า ๆ ๆ ขำดี', 'เดี๋ยวพี่เอาคืน 💪', 'ซนจริง ๆ'] }[b.id]));
     toast(`😈 แกล้ง${b.n}สำเร็จ: ${PRANKS[kind].n}${r !== 'ok' ? ' ได้ ' + r : ''}`, 'good'); friendBar(b); hud();
+  }
+  realPrank(kind) {
+    const b = this.bot; const bs = S.bots[b.id];
+    if (this.prankBusy) return;
+    const opts = realPrankOpts(kind, this.V);
+    if (!opts) { toast(kind === 'monkey' ? `${esc(b.n)}ไม่มีต้นผลไม้ให้ลิงไปกิน` : 'ไม่มีที่ให้แกล้งแบบนี้', 'bad'); return; }
+    this.prankBusy = true;
+    realAct(b, 'prank', kind, opts).then((res) => {
+      this.prankBusy = false; if (!res || !this.scene.isActive()) return;
+      if (res.caught) {
+        const free = bs.revengeFree > 0; if (free) bs.revengeFree--; else { bs.pranks++; S.counters.pranks++; }
+        S.shells = Math.max(0, S.shells - 10); mark(); sfx('goose'); this.cameras.main.shake(200, 0.006);
+        toast(`🦢 ห่านยามของ${esc(b.n)}จับได้! โดนปรับ ${iconHTML('shells')}10`, 'bad'); friendBar(b); hud(); return;
+      }
+      sfx({ mud: 'mud', leaves: 'sweep', sticker: 'boom', monkey: 'monkey', boar: 'boar', rooster: 'rooster' }[kind]);
+      const r = doMyPrank(b, kind, opts); if (!r) return;
+      this.V.pranksOnMe.push({ id: res.id, bot: 'me', kind, at: now(), ...opts });
+      this.refreshPranks(); this.cameras.main.shake(180, 0.004);
+      this.say(this.owner, pick(['เฮ้ย! เดี๋ยวเจอดี 😤', 'จำไว้เลยนะ!!', 'ว้าย! 😳', 'เดี๋ยวเอาคืน 💪']));
+      toast(`😈 แกล้ง${esc(b.n)}สำเร็จ: ${PRANKS[kind].n}${r !== 'ok' ? ' ได้ ' + r : ''} (เพื่อนจะเห็นตอนเข้าเกม)`, 'good'); friendBar(b); hud();
+    });
   }
   say(spr, text) {
     if (!spr) return; if (spr.sayT) spr.sayT.destroy();

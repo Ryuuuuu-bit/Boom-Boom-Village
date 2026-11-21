@@ -37,8 +37,29 @@ async function init() {
       level INTEGER,
       updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
     );
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS friend_code TEXT UNIQUE;
+    CREATE TABLE IF NOT EXISTS friendships (
+      user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      friend_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      PRIMARY KEY (user_id, friend_id)
+    );
+    -- สิ่งที่เพื่อนทำกับหมู่บ้านเรา (ช่วย/แกล้ง) รอให้เกมของเจ้าของหมู่บ้านดึงไปใช้
+    CREATE TABLE IF NOT EXISTS village_events (
+      id BIGSERIAL PRIMARY KEY,
+      target_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      actor_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      kind TEXT NOT NULL,
+      payload JSONB NOT NULL DEFAULT '{}',
+      day TEXT NOT NULL,
+      applied BOOLEAN NOT NULL DEFAULT FALSE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS ve_target ON village_events(target_id, applied);
+    CREATE INDEX IF NOT EXISTS ve_actor_day ON village_events(actor_id, day);
   `);
   await p.query('DELETE FROM sessions WHERE expires_at < now()');
+  await p.query("DELETE FROM village_events WHERE applied AND created_at < now() - interval '14 days'");
   pool = p;
   console.log('[db] ready');
   return true;

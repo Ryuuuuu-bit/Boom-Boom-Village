@@ -370,13 +370,14 @@ PANELS.bonfire = () => {
   } };
 };
 // --- เพื่อน ---
-PANELS.friends = () => {
-  let html = '<p class="muted">ไปเยี่ยมหมู่บ้านเพื่อนเพื่อช่วยรดน้ำ ไล่หนอน ให้อาหารสัตว์ (ได้ขนนกทอง) หรือจะแกล้งก็ได้ แต่ระวังโดนแกล้งคืน! 😈</p>';
+PANELS.friends = (arg, P) => {
+  if (!P.loaded && realOn()) { P.loaded = true; loadFriends().then(() => { if (PANEL === P) renderPanel(); }); }
+  let html = '<p class="muted">ไปเยี่ยมหมู่บ้านเพื่อนเพื่อช่วยรดน้ำ ไล่หนอน ให้อาหารสัตว์ (ได้ขนนกทอง) หรือจะแกล้งก็ได้ แต่ระวังโดนแกล้งคืน! 😈</p>' + realFriendsHTML() + '<div class="section">🏕️ เพื่อนบ้าน (ชาวเผ่า NPC)</div>';
   for (const b of BOTS) { const bs = S.bots[b.id];
     html += `<div class="row"><img src="${A.images[b.img]}" style="height:56px;image-rendering:auto"><div class="grow"><b>${b.e} ${b.n}</b> ${'★'.repeat(b.stars)}${bs.blocked ? ' <span class="muted">(บล็อกอยู่)</span>' : ''}<br><span class="muted">${b.d}</span><br>ช่วยได้อีก ${helpLeft(b)} · แกล้งได้อีก ${prankLeft(b)} · ${bs.giftDay === dayKey() ? 'รับของขวัญแล้ว' : '🎁 มีของขวัญรออยู่'}</div>
       <div style="display:flex;flex-direction:column;gap:4px"><button class="btn green" data-a="go" data-v="${b.id}">🚶 ไปเยี่ยม</button><button class="btn sm" data-a="block" data-v="${b.id}">${bs.blocked ? 'เลิกบล็อก' : '🚫 บล็อก'}</button></div></div>`; }
   html += `<p class="muted">วันนี้ช่วยไปแล้ว ${S.counters.helps}/${CFG.HELP_PER_DAY} · แกล้งไปแล้ว ${S.counters.pranks}/${prankQuota()} · โดนแกล้ง ${S.counters.pranked}/${CFG.BOT_PRANKS_TO_SHIELD} (ครบแล้วได้โล่ถึงเที่ยงคืน)</p>`;
-  return { title: '👥 เพื่อนบ้าน', html, acts: {
+  return { title: '👥 เพื่อนบ้าน', html, acts: { ...realFriendActs,
     go: (id) => { closePanel(); travel(id); },
     block: (id) => { S.bots[id].blocked = !S.bots[id].blocked; mark(); toast(S.bots[id].blocked ? `บล็อก${botById(id).n}แล้ว จะไม่มาแกล้งอีก` : 'เลิกบล็อกแล้ว'); renderPanel(); },
   } };

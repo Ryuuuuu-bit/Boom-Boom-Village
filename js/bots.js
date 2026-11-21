@@ -1,6 +1,6 @@
 /* Boom Boom Village — เพื่อนบอท: มาช่วย มาแกล้ง ส่งของขวัญ และหมู่บ้านของพวกเขา */
 'use strict';
-const botById = (id) => BOTS.find((b) => b.id === id);
+const botById = (id) => BOTS.find((b) => b.id === id) || (typeof realBotById === 'function' ? realBotById(id) : undefined);
 
 // ---------- พื้นที่ทางเดินของเรา (ใช้วางโคลน/ใบไม้) ----------
 function homePathCells() {
@@ -152,11 +152,12 @@ function doMyPrank(b, kind, opts = {}) {
   const p = { id: uid('mp'), kind, at: now(), ...opts };
   bs.myPranks.push(p);
   let got = {};
-  if (kind === 'monkey' && bs.village.fruit > 1) { bs.village.fruit--; got = { banana: 1 }; }
+  if (kind === 'monkey' && b.real) { if (opts.stolen) got = { [opts.fruit || 'banana']: 1 }; }
+  else if (kind === 'monkey' && bs.village.fruit > 1) { bs.village.fruit--; got = { banana: 1 }; }
   stat('prank'); addXP(2);
   addLog({ kind: 'mine', bot: b.id, msg: `😈 คุณแกล้ง${b.n}: ${PRANKS[kind].n}${free ? ' (แกล้งคืน)' : ''}` });
   // บอทเอาคืน (ถ้าไม่ใช่การแกล้งคืนของเรา และไม่ติดโล่)
-  if (!free && !shielded() && !bs.blocked && Math.random() < 0.6 && !(S.story.ch === 0)) {
+  if (!b.real && !free && !shielded() && !bs.blocked && Math.random() < 0.6 && !(S.story.ch === 0)) {
     setTimeout(() => {}, 0);
     S.botRevenge = S.botRevenge || [];
     S.botRevenge.push({ bot: b.id, at: now() + rnd(10, 30) * MIN });

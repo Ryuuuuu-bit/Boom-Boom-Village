@@ -178,6 +178,7 @@ function dailyReset() {
   }
   if (S.counters.day !== d) { S.counters = { day: d, helps: 0, pranks: 0, pranked: 0, shieldUntil: S.counters.shieldUntil }; }
   for (const b of BOTS) { const st = S.bots[b.id] || (S.bots[b.id] = newBotState(b)); if (st.day !== d) { st.day = d; st.helps = 0; st.pranks = 0; } }
+  for (const [k, st] of Object.entries(S.bots)) if (k.startsWith('u:') && st.day !== d) { st.day = d; st.helps = 0; st.pranks = 0; }
   if (S.villagerWater.day !== d) S.villagerWater = { day: d, used: 0 };
 }
 function rerollDaily(i) {

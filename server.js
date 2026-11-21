@@ -68,7 +68,7 @@ function rateLimit(req, key, max, windowMs) {
 }
 setInterval(() => { const t = Date.now(); for (const [k, a] of hits) if (!a.some((x) => t - x < 3600e3)) hits.delete(k); }, 600e3).unref();
 
-const cleanName = (s) => String(s || '').replace(/[\u0000-\u001f<>]/g, '').trim().slice(0, 24);
+const cleanName = (s) => String(s || '').replace(/[\u0000-\u001f<>"'&`]/g, '').trim().slice(0, 24);
 const cleanEmail = (s) => String(s || '').trim().toLowerCase().slice(0, 200);
 const okEmail = (e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
 const randomName = () => 'หัวหน้าเผ่า' + (1000 + Math.floor(Math.random() * 9000));
@@ -105,12 +105,31 @@ async function fbVerify(accessToken) {
   return me;
 }
 
+
+// ---------- เพื่อน ----------
+const RULES = { HELP_PER_FRIEND: 5, PRANK_PER_FRIEND: 2, PRANK_PER_DAY: 6, PRANKS_TO_SHIELD: 3, GOOSE_CATCH: 0.25, PRANKS: ['mud', 'sticker', 'monkey', 'boar', 'leaves', 'rooster'] };
+const gameDay = () => new Date(Date.now() + 7 * 3600e3).toISOString().slice(0, 10); // วันตามเวลาไทย
+const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+async function ensureCode(u) {
+  if (u.friend_code) return u.friend_code;
+  for (let i = 0; i < 8; i++) {
+    let c = ''; for (let j = 0; j < 6; j++) c += CODE_CHARS[crypto.randomInt(CODE_CHARS.length)];
+    try { const r = await db.q('UPDATE users SET friend_code = $1 WHERE id = $2 AND friend_code IS NULL RETURNING friend_code', [c, u.id]); if (r.rowCount) return c; const x = await db.q('SELECT friend_code FROM users WHERE id = $1', [u.id]); if (x.rows[0].friend_code) return x.rows[0].friend_code; } catch (e) { if (e.code !== '23505') throw e; }
+  }
+  fail(500, 'code_failed');
+}
+async function friendOf(uid, fid) {
+  const r = await db.q('SELECT u.* FROM friendships f JOIN users u ON u.id = f.friend_id WHERE f.user_id = $1 AND f.friend_id = $2', [uid, fid]);
+  if (!r.rows[0]) fail(403, 'not_friend', 'ยังไม่ได้เป็นเพื่อนกัน');
+  return r.rows[0];
+}
+
 // ---------- API ----------
 const API = {
   'GET /api/config': async () => ({ accounts: db.enabled(), facebookAppId: FB_APP_ID && FB_APP_SECRET ? FB_APP_ID : null }),
 
   'POST /api/auth/guest': async (req, res, b) => {
-    rateLimit(req, 'guest', 10, 3600e3);
+    rateLimit(req, 'guest', 30, 3600e3);
     const r = await db.q('INSERT INTO users (name) VALUES ($1) RETURNING *', [cleanName(b.name) || randomName()]);
     return authed(res, r.rows[0]);
   },
@@ -197,6 +216,105 @@ const API = {
 
   // เริ่มเกมใหม่ (ลบเซฟบนเซิร์ฟเวอร์)
   'DELETE /api/save': async (req) => { const u = await needUser(req); await db.q('DELETE FROM saves WHERE user_id = $1', [u.id]); return { ok: true }; },
+
+  // ---------- เพื่อนจริง ----------
+  'GET /api/friends': async (req) => {
+    const u = await needUser(req);
+    const code = await ensureCode(u);
+    const r = await db.q(`SELECT u.id, u.name, s.level, s.updated_at,
+        (SELECT count(*) FROM village_events e WHERE e.actor_id = $1 AND e.target_id = u.id AND e.day = $2 AND e.kind = 'help')::int AS helps,
+        (SELECT count(*) FROM village_events e WHERE e.actor_id = $1 AND e.target_id = u.id AND e.day = $2 AND e.kind IN ('prank','caught'))::int AS pranks
+      FROM friendships f JOIN users u ON u.id = f.friend_id LEFT JOIN saves s ON s.user_id = u.id
+      WHERE f.user_id = $1 ORDER BY s.updated_at DESC NULLS LAST LIMIT 200`, [u.id, gameDay()]);
+    return { code, friends: r.rows.map((f) => ({ id: String(f.id), name: f.name, level: f.level || 1, lastActive: f.updated_at, helps: f.helps, pranks: f.pranks })) };
+  },
+  'POST /api/friends/add': async (req, res, b) => {
+    const u = await needUser(req);
+    rateLimit(req, 'friendadd', 30, 3600e3);
+    const code = String(b.code || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+    const r = await db.q('SELECT * FROM users WHERE friend_code = $1', [code]);
+    const f = r.rows[0];
+    if (!f) fail(404, 'no_code', 'ไม่พบรหัสเพื่อนนี้');
+    if (String(f.id) === String(u.id)) fail(400, 'self', 'นี่คือรหัสของคุณเอง ส่งให้เพื่อนนะ');
+    const n = await db.q('SELECT count(*)::int AS n FROM friendships WHERE user_id = $1', [u.id]);
+    if (n.rows[0].n >= 200) fail(400, 'too_many', 'มีเพื่อนครบ 200 คนแล้ว');
+    await db.q('INSERT INTO friendships (user_id, friend_id) VALUES ($1, $2), ($2, $1) ON CONFLICT DO NOTHING', [u.id, f.id]);
+    return { friend: { id: String(f.id), name: f.name } };
+  },
+  'POST /api/friends/remove': async (req, res, b) => {
+    const u = await needUser(req);
+    await db.q('DELETE FROM friendships WHERE (user_id = $1 AND friend_id = $2) OR (user_id = $2 AND friend_id = $1)', [u.id, Number(b.id) || 0]);
+    return { ok: true };
+  },
+  // ดูหมู่บ้านเพื่อน (เฉพาะเพื่อน)
+  'GET /api/village': async (req) => {
+    const u = await needUser(req);
+    const fid = Number(new URL(req.url, 'http://x').searchParams.get('id')) || 0;
+    const f = await friendOf(u.id, fid);
+    const sv = await db.q('SELECT data FROM saves WHERE user_id = $1', [fid]);
+    const d = (sv.rows[0] && sv.rows[0].data) || null;
+    const pend = await db.q("SELECT id, actor_id, kind, payload, created_at FROM village_events WHERE target_id = $1 AND NOT applied AND kind = 'prank' ORDER BY id LIMIT 50", [fid]);
+    const today = await db.q(`SELECT
+        count(*) FILTER (WHERE actor_id = $2 AND kind = 'help')::int AS helps,
+        count(*) FILTER (WHERE actor_id = $2 AND kind IN ('prank','caught'))::int AS pranks,
+        count(*) FILTER (WHERE kind IN ('prank','caught'))::int AS pranked
+      FROM village_events WHERE target_id = $1 AND day = $3`, [fid, u.id, gameDay()]);
+    const village = d ? {
+      level: d.level || 1, era: d.era || 1, owned: d.owned, objects: d.objects || [], plots: d.plots || {}, animals: d.animals || [],
+      pranksOnMe: d.pranksOnMe || [], peaceful: !!d.peaceful, shieldUntil: (d.counters && d.counters.shieldUntil) || 0,
+    } : null;
+    return { user: { id: String(f.id), name: f.name }, village, pending: pend.rows.map((e) => ({ ...e.payload, id: 'ev' + e.id, bot: 'u:' + e.actor_id, at: new Date(e.created_at).getTime() })), today: today.rows[0], now: Date.now() };
+  },
+  // ช่วย/แกล้งหมู่บ้านเพื่อน (บันทึกไว้ให้เจ้าของหมู่บ้านรับตอนเข้าเกม)
+  'POST /api/village/act': async (req, res, b) => {
+    const u = await needUser(req);
+    rateLimit(req, 'act', 120, 3600e3);
+    const fid = Number(b.id) || 0;
+    await friendOf(u.id, fid);
+    const kind = b.kind === 'prank' ? 'prank' : 'help';
+    const what = String(b.what || '');
+    const payload = b.payload && typeof b.payload === 'object' ? b.payload : {};
+    if (JSON.stringify(payload).length > 2000) fail(400, 'bad_payload');
+    const day = gameDay();
+    const c = (await db.q(`SELECT
+        count(*) FILTER (WHERE actor_id = $2 AND target_id = $1 AND kind = 'help')::int AS helps,
+        count(*) FILTER (WHERE actor_id = $2 AND target_id = $1 AND kind IN ('prank','caught'))::int AS pranks,
+        count(*) FILTER (WHERE actor_id = $2 AND kind IN ('prank','caught'))::int AS my_pranks,
+        count(*) FILTER (WHERE target_id = $1 AND kind IN ('prank','caught'))::int AS pranked
+      FROM village_events WHERE day = $3 AND (actor_id = $2 OR target_id = $1)`, [fid, u.id, day])).rows[0];
+    if (kind === 'help') {
+      if (!['water', 'pest', 'feed'].includes(what)) fail(400, 'bad_kind');
+      if (c.helps >= RULES.HELP_PER_FRIEND) fail(429, 'help_limit', `วันนี้ช่วยเพื่อนคนนี้ครบ ${RULES.HELP_PER_FRIEND} ครั้งแล้ว`);
+    } else {
+      if (!RULES.PRANKS.includes(what)) fail(400, 'bad_kind');
+      if (c.pranks >= RULES.PRANK_PER_FRIEND) fail(429, 'prank_limit', 'แกล้งเพื่อนคนนี้วันนี้ครบแล้ว พรุ่งนี้มาใหม่นะ');
+      if (c.my_pranks >= RULES.PRANK_PER_DAY) fail(429, 'prank_day', 'วันนี้แกล้งครบโควตาแล้ว');
+      if (c.pranked >= RULES.PRANKS_TO_SHIELD) fail(409, 'shielded', 'หมู่บ้านนี้โดนแกล้งครบแล้ววันนี้ มีโล่กันแกล้งอยู่');
+      const sv = await db.q('SELECT data FROM saves WHERE user_id = $1', [fid]);
+      const d = (sv.rows[0] && sv.rows[0].data) || {};
+      if (d.peaceful) fail(409, 'peaceful', 'หมู่บ้านนี้เปิดโหมดสงบอยู่ แกล้งไม่ได้');
+      if (d.counters && d.counters.shieldUntil > Date.now()) fail(409, 'shielded', 'หมู่บ้านนี้มีโล่กันแกล้งอยู่');
+      // ห่านยามจับได้ 25%
+      if ((d.objects || []).some((o) => o.type === 'goose') && Math.random() < RULES.GOOSE_CATCH) {
+        await db.q('INSERT INTO village_events (target_id, actor_id, kind, payload, day) VALUES ($1, $2, $3, $4, $5)', [fid, u.id, 'caught', { kind: what }, day]);
+        return { ok: true, caught: true };
+      }
+    }
+    const r = await db.q('INSERT INTO village_events (target_id, actor_id, kind, payload, day) VALUES ($1, $2, $3, $4, $5) RETURNING id', [fid, u.id, kind, { ...payload, kind: kind === 'prank' ? what : undefined, what }, day]);
+    return { ok: true, id: 'ev' + r.rows[0].id };
+  },
+  // เหตุการณ์ที่เพื่อนทำกับหมู่บ้านเรา (ยังไม่ได้รับ)
+  'GET /api/events': async (req) => {
+    const u = await needUser(req);
+    const r = await db.q('SELECT e.id, e.actor_id, a.name, e.kind, e.payload, e.created_at FROM village_events e JOIN users a ON a.id = e.actor_id WHERE e.target_id = $1 AND NOT e.applied ORDER BY e.id LIMIT 100', [u.id]);
+    return { events: r.rows.map((e) => ({ id: 'ev' + e.id, actor: { id: String(e.actor_id), name: e.name }, kind: e.kind, payload: e.payload, at: new Date(e.created_at).getTime() })) };
+  },
+  'POST /api/events/ack': async (req, res, b) => {
+    const u = await needUser(req);
+    const ids = (Array.isArray(b.ids) ? b.ids : []).slice(0, 200).map((x) => Number(String(x).replace('ev', ''))).filter((x) => x > 0);
+    if (ids.length) await db.q('UPDATE village_events SET applied = TRUE WHERE target_id = $1 AND id = ANY($2::bigint[])', [u.id, ids]);
+    return { ok: true };
+  },
 };
 API['POST /api/save'] = API['PUT /api/save']; // for navigator.sendBeacon / keepalive on page close
 

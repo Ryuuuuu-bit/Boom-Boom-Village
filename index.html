@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
 <title>Boom Boom Village</title>
-<link rel="stylesheet" href="fonts.css?v=6">
-<link rel="stylesheet" href="style.css?v=6">
+<link rel="stylesheet" href="fonts.css?v=7">
+<link rel="stylesheet" href="style.css?v=7">
 </head>
 <body>
 <div id="game"></div>
@@ -17,8 +17,29 @@
   <div class="logo">Boom Boom<br><span>Village</span></div>
   <div class="tag">หมู่บ้านป่วนเผ่า · ปลูก เลี้ยง สร้าง ช่วยเพื่อน และแกล้งเพื่อน!</div>
   <div class="bar"><div id="load-bar"></div></div>
+  <div id="auth" class="hidden">
+    <div class="au-card">
+      <div id="au-main" class="au-stack">
+        <button id="au-guest" class="btn gold au-big">▶ เล่นเลย</button>
+        <button id="au-fb" class="btn blue hidden"><b class="fb-f">f</b> เข้าสู่ระบบด้วย Facebook</button>
+        <button id="au-email" class="btn">✉️ เข้าสู่ระบบ / สมัครด้วยอีเมล</button>
+        <div class="au-note">เล่นเลยได้ทันที แล้วค่อยผูกอีเมลทีหลังในเมนูตั้งค่า เซฟไม่หาย</div>
+      </div>
+      <form id="au-form" class="au-stack hidden" autocomplete="on">
+        <div class="au-tabs"><button id="au-tab-login" class="on" type="button">เข้าสู่ระบบ</button><button id="au-tab-reg" type="button">สมัครใหม่</button></div>
+        <div id="au-name-row" class="hidden"><input id="au-name" class="au-in" maxlength="24" placeholder="ชื่อหัวหน้าเผ่า (ตั้งทีหลังได้)" autocomplete="nickname"></div>
+        <input id="au-mail" class="au-in" type="email" placeholder="อีเมล" autocomplete="email" required>
+        <input id="au-pass" class="au-in" type="password" placeholder="รหัสผ่าน (อย่างน้อย 6 ตัว)" autocomplete="current-password" minlength="6" required>
+        <button id="au-submit" class="btn green" type="submit">เข้าสู่ระบบ</button>
+        <a href="#" id="au-back" class="au-link">‹ กลับ</a>
+      </form>
+      <div id="au-err" class="hidden"></div>
+      <div id="au-busy" class="hidden"></div>
+    </div>
+  </div>
   <button id="start-btn" class="btn gold big hidden">▶ เริ่มเล่น</button>
-  <div class="tiny">คลิกเพื่อเริ่ม (เปิดเสียงด้วยนะ 🔊)</div>
+  <div id="au-who" class="tiny hidden"></div>
+  <div class="tiny">เปิดเสียงด้วยนะ 🔊</div>
 </div>
 
 <!-- แถบบน -->
@@ -114,13 +135,14 @@
 <div id="confetti"></div>
 
 <script src="lib/phaser.min.js"></script>
-<script src="assets.js?v=6"></script>
-<script src="js/data.js?v=6"></script>
-<script src="js/state.js?v=6"></script>
-<script src="js/bots.js?v=6"></script>
-<script src="js/audio.js?v=6"></script>
-<script src="js/world.js?v=6"></script>
-<script src="js/ui.js?v=6"></script>
-<script src="js/main.js?v=6"></script>
+<script src="assets.js?v=7"></script>
+<script src="js/data.js?v=7"></script>
+<script src="js/state.js?v=7"></script>
+<script src="js/bots.js?v=7"></script>
+<script src="js/audio.js?v=7"></script>
+<script src="js/world.js?v=7"></script>
+<script src="js/ui.js?v=7"></script>
+<script src="js/auth.js?v=7"></script>
+<script src="js/main.js?v=7"></script>
 </body>
 </html>

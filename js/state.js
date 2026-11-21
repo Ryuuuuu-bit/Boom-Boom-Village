@@ -1,6 +1,7 @@
 /* Boom Boom Village — ข้อมูลผู้เล่น เศรษฐกิจ และกติกาทั้งหมด (ไม่เกี่ยวกับการวาดภาพ) */
 'use strict';
-const SAVE_KEY = 'boomboom_save_v2';
+let SAVE_KEY = 'boomboom_save_v2';
+const LEGACY_SAVE_KEY = 'boomboom_save_v2';
 let S = null;
 const now = () => Date.now();
 const rnd = (a, b) => a + Math.random() * (b - a);
@@ -57,7 +58,7 @@ function load() {
   return null;
 }
 let dirty = false;
-function save() { if (!S) return; S.lastSeen = now(); try { localStorage.setItem(SAVE_KEY, JSON.stringify(S)); } catch (e) {} dirty = false; }
+function save() { if (!S) return; S.lastSeen = now(); try { localStorage.setItem(SAVE_KEY, JSON.stringify(S)); } catch (e) {} dirty = false; if (typeof AUTH !== 'undefined') AUTH.queueSync(); }
 function mark() { dirty = true; }
 
 // ---------- ของและเงิน ----------

@@ -79,7 +79,7 @@ let lastRes = {};
 function hud() {
   if (!S) return;
   $('lvl').textContent = S.level;
-  $('pname').textContent = (S.title ? `「${S.title}」 ` : '') + 'หัวหน้าเผ่า · ' + ERAS[S.era - 1].n;
+  $('pname').textContent = (S.title ? `「${S.title}」 ` : '') + ((typeof AUTH !== 'undefined' && AUTH.user && AUTH.user.name) || 'หัวหน้าเผ่า') + ' · ' + ERAS[S.era - 1].n;
   const need = XP_NEED(S.level); $('xpfill').style.width = Math.min(100, (S.xp / need) * 100) + '%';
   $('xptxt').textContent = S.level >= maxLevel() ? 'เลเวลสูงสุดของยุค' : `${S.xp}/${need} XP`;
   const vals = { shells: S.shells, amber: S.amber, feathers: S.feathers, coins: S.event.coins };
@@ -162,7 +162,7 @@ function renderPanel(first) {
 function tabsHTML(list, cur) { return `<div class="tabs">${list.map(([k, n]) => `<button data-tab="${k}" class="${k === cur ? 'on' : ''}">${n}</button>`).join('')}</div>`; }
 
 const PANELS = {};
-const PANEL_IC = { build: 'ui_build', market: 'ui_market', orders: 'ui_orders', storage: 'ui_storage', friends: 'ui_friends', log: 'ui_log', daily: 'ui_daily', login: 'ui_gift', ach: 'ui_trophy', event: 'ui_raft', settings: 'ui_gear', help: 'ui_help', expand: 'ui_flag', chief: 'ui_crown', bonfire: 'ui_fire', hut: 'ui_home', seeds: 'ui_seed' };
+const PANEL_IC = { build: 'ui_build', market: 'ui_market', orders: 'ui_orders', storage: 'ui_storage', friends: 'ui_friends', log: 'ui_log', daily: 'ui_daily', login: 'ui_gift', ach: 'ui_trophy', event: 'ui_raft', settings: 'ui_gear', account: 'ui_friends', help: 'ui_help', expand: 'ui_flag', chief: 'ui_crown', bonfire: 'ui_fire', hut: 'ui_home', seeds: 'ui_seed' };
 // --- สร้าง ---
 PANELS.build = (arg, P) => {
   const tab = P.tab || 'building';
@@ -420,18 +420,19 @@ PANELS.event = () => {
 // --- ตั้งค่า ---
 PANELS.settings = () => {
   const canPeace = S.peacefulDay !== dayKey();
-  const html = `<div class="row"><div class="grow">🎵 ดนตรีประกอบ</div><button class="btn sm" data-a="mus">${S.settings.music ? 'เปิดอยู่' : 'ปิดอยู่'}</button></div>
+  const html = accountRows() + `<div class="row"><div class="grow">🎵 ดนตรีประกอบ</div><button class="btn sm" data-a="mus">${S.settings.music ? 'เปิดอยู่' : 'ปิดอยู่'}</button></div>
     <div class="row"><div class="grow">🔊 เสียงเอฟเฟกต์</div><button class="btn sm" data-a="sfx">${S.settings.sfx ? 'เปิดอยู่' : 'ปิดอยู่'}</button></div>
     <div class="row"><div class="grow">🕊️ โหมดหมู่บ้านสงบ<div class="muted">เปิดแล้วไม่มีใครแกล้งเรา และเราก็แกล้งใครไม่ได้ (สลับได้วันละ 1 ครั้ง)</div></div><button class="btn sm ${S.peaceful ? 'green' : ''}" data-a="peace" ${canPeace ? '' : 'disabled'}>${S.peaceful ? 'เปิดอยู่' : 'ปิดอยู่'}</button></div>
-    <div class="row"><div class="grow">💾 บันทึกเกมอัตโนมัติในเบราว์เซอร์นี้</div><button class="btn sm" data-a="save">บันทึกตอนนี้</button></div>
+    <div class="row"><div class="grow">💾 บันทึกเกมอัตโนมัติ${AUTH.online ? ' (เซฟขึ้นเซิร์ฟเวอร์)' : 'ในเบราว์เซอร์นี้'}</div><button class="btn sm" data-a="save">บันทึกตอนนี้</button></div>
     <div class="row"><div class="grow">🧪 โหมดทดสอบ: ข้ามเวลา 1 ชั่วโมง<div class="muted">สำหรับลองเล่น ให้ผัก/สัตว์/โรงงานโตเร็ว</div></div><button class="btn sm" data-a="skip">⏩ +1 ชม.</button></div>
     <div class="row"><div class="grow">🗑️ เริ่มเกมใหม่ทั้งหมด</div><button class="btn red sm" data-a="reset">ลบเซฟ</button></div>`;
   return { title: '⚙️ ตั้งค่า', html, narrow: true, acts: {
     mus: () => { S.settings.music = !S.settings.music; mark(); renderPanel(); }, sfx: () => { S.settings.sfx = !S.settings.sfx; mark(); renderPanel(); },
     peace: () => { S.peaceful = !S.peaceful; S.peacefulDay = dayKey(); mark(); toast(S.peaceful ? '🕊️ เปิดโหมดหมู่บ้านสงบแล้ว' : 'ปิดโหมดสงบ เพื่อน ๆ แกล้งได้แล้ว 😈'); renderPanel(); hud(); },
-    save: () => { save(); toast('💾 บันทึกแล้ว', 'good'); },
+    save: async () => { save(); if (AUTH.online) { clearTimeout(AUTH.timer); AUTH.timer = null; await authPush(); } toast('💾 บันทึกแล้ว', 'good'); },
+    account: () => openPanel('account'),
     skip: () => { timeSkip(HOUR); toast('⏩ ข้ามเวลาไป 1 ชั่วโมง', 'good'); },
-    reset: () => { if (PANEL.confirmReset) { localStorage.removeItem(SAVE_KEY); location.reload(); } else { PANEL.confirmReset = true; toast('กด "ลบเซฟ" อีกครั้งเพื่อยืนยัน', 'bad'); } },
+    reset: () => { if (PANEL.confirmReset) { authResetSave(); } else { PANEL.confirmReset = true; toast('กด "ลบเซฟ" อีกครั้งเพื่อยืนยัน', 'bad'); } },
   } };
 };
 // --- วิธีเล่น ---

@@ -1,9 +1,8 @@
 /* Boom Boom Village — เริ่มเกม วนเวลา และเชื่อมทุกส่วนเข้าด้วยกัน */
 'use strict';
-S = load() || newSave();
-const firstRun = !S.welcomed;
-const awaySince = S.lastSeen;
-dailyReset();
+// S ถูกตั้งหลังเข้าสู่ระบบ (ดู js/auth.js)
+let firstRun = false, awaySince = 0;
+const authReady = authBoot().then(() => { firstRun = !S.welcomed; awaySince = S.lastSeen; dailyReset(); if (AUTH.migrated) setTimeout(() => toast('☁️ ย้ายหมู่บ้านเดิมในเครื่องนี้ขึ้นบัญชีแล้ว', 'good'), 1500); });
 
 // ---------- เหตุการณ์ ----------
 let pendingLevel = [];
@@ -57,14 +56,15 @@ function gameTick() {
 setInterval(gameTick, 2000);
 setInterval(() => hud(), 1000);
 window.addEventListener('beforeunload', () => save());
-document.addEventListener('visibilitychange', () => { if (document.hidden) save(); });
+document.addEventListener('visibilitychange', () => { if (document.hidden && S) { save(); if (typeof AUTH !== 'undefined') authPush(true); } });
 
 // ---------- เปิดเกม ----------
 bindUI();
+bindAuthUI();
 // รอฟอนต์โหลดก่อน (ข้อความในฉากวาดเป็นภาพ ถ้าฟอนต์ยังไม่มาจะได้ฟอนต์สำรองแทน)
 const fontsReady = document.fonts ? Promise.race([Promise.all(['500 12px "BBV Sans"', '600 12px "BBV Sans"', '700 12px "BBV Sans"'].map((f) => document.fonts.load(f, 'กขAa1'))), new Promise((r) => setTimeout(r, 2500))]) : Promise.resolve();
 let game = null;
-fontsReady.catch(() => {}).then(() => { game = new Phaser.Game({
+Promise.all([fontsReady.catch(() => {}), authReady]).then(() => { game = new Phaser.Game({
   type: Phaser.AUTO, parent: 'game', backgroundColor: '#1a1816', pixelArt: true, roundPixels: true,
   scale: { mode: Phaser.Scale.RESIZE, width: window.innerWidth, height: window.innerHeight },
   scene: [World],

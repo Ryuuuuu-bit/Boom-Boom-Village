@@ -244,5 +244,11 @@ const server = http.createServer((req, res) => {
   serveStatic(req, res, urlPath);
 });
 
-db.init().catch((e) => console.error('[db] init failed, accounts disabled:', e.message))
-  .finally(() => server.listen(PORT, () => console.log(`Boom Boom Village listening on ${PORT}`)));
+server.listen(PORT, () => console.log(`Boom Boom Village listening on ${PORT}`));
+// ต่อฐานข้อมูล (ลองซ้ำถ้าฐานข้อมูลยังไม่พร้อม เช่นตอนเพิ่งเปิดเครื่อง)
+(async function connectDb(attempt = 1) {
+  try { await db.init(); } catch (e) {
+    console.error(`[db] init failed (attempt ${attempt}):`, e.message);
+    setTimeout(() => connectDb(attempt + 1), Math.min(60000, 3000 * attempt));
+  }
+})();

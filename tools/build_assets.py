@@ -100,15 +100,15 @@ def player_sheet(prefix, CH_H=84, FW=96):
     """ชีตตัวผู้เล่นจากท่าเดิน 4 ทิศ x 4 เฟรม: แถว 1-4 ยืนหายใจ (ใช้เฟรมที่ขาชิดที่สุด), แถว 5-8 เดิน
     คืนค่า (ชีต, แผนที่ส่วน) แผนที่ส่วนใช้เปลี่ยนสีผม/ผิว/ชุดในเกม (ตัวสร้างตัวละคร)"""
     import numpy as np
-    sys.path.insert(0, os.path.dirname(__file__)); from regions import region_mask
+    sys.path.insert(0, os.path.dirname(__file__)); from regions import region_mask, downsample
     walk, masks = {}, {}
     for d in ['south', 'north', 'west', 'east']:
         frs = [Image.open(os.path.join(A, 'hd', '%s%s_%d.png' % (prefix, d, i))).convert('RGBA') for i in range(4)]
         frs = [f.crop(f.getbbox()) for f in frs]
-        ms = [Image.fromarray(region_mask(np.array(f), d) * 60) for f in frs]
+        ms = [region_mask(np.array(f), d) for f in frs]
         sc = CH_H / sorted(f.height for f in frs)[1]
         walk[d] = [f.resize((round(f.width * sc), round(f.height * sc)), Image.LANCZOS) for f in frs]
-        masks[d] = [m.resize(f.size, Image.NEAREST) for m, f in zip(ms, walk[d])]
+        masks[d] = [downsample(m, f.size) for m, f in zip(ms, walk[d])]
     rows = {1: 'south', 2: 'west', 3: 'east', 4: 'north', 5: 'south', 6: 'west', 7: 'east', 8: 'north'}
     hd = Image.new('RGBA', (FW * 6, FW * 9)); rm = Image.new('L', hd.size)
     for r, d in rows.items():

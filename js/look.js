@@ -92,7 +92,9 @@ function buildLookCanvas(look) {
     if (r === 1 || r === 2) { // ผม/ผิว: ตั้งสีใหม่ คงเงาเดิม
       const base = r === 1 ? LOOK_BASE.hair : LOOK_BASE.skin;
       const ref = r === 1 ? 0.5 : 0.85;
-      h = t.h + (h - (r === 1 ? 17 : 22)) * 0.5; s = _cl(s * t.s / ref, 0, 1); l = _cl(remapL(l, base, t.l), 0, 1);
+      h = t.h + (h - (r === 1 ? 17 : 22)) * 0.5; s = _cl(s * t.s / ref, 0, 1);
+      // ผิว/ผมที่เข้มกว่าภาพเดิม: ลดความสว่างทั้งช่วงเท่า ๆ กัน (เดิมไฮไลต์ถูกขยายจนหน้าดูด่าง)
+      l = _cl(r === 2 && t.l < base ? l * t.l / base : remapL(l, base, t.l), 0, 1);
     } else { // ชุด/ผ้าคลุม: หมุนสี
       h = (h + t.dh + 360) % 360; s = _cl(s * (t.sm || 1), 0, 1); l = _cl(t.lm ? remapL(l, 0.4, _cl(0.4 * t.lm, 0.05, 0.9)) : l, 0, 1);
     }

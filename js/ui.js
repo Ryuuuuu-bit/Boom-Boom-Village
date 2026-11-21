@@ -19,7 +19,11 @@ function uiBlocking() { return !$('modal').classList.contains('hidden') || !$('t
 function isTyping() { const a = document.activeElement; return a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA'); }
 
 // ---------- ข้อความเด้ง ----------
+// มือถือไม่มีปุ่ม Space: เปลี่ยนคำแนะนำให้ชี้ไปที่ปุ่ม ✋ บนจอแทน
+const TOUCH = 'ontouchstart' in window;
+const keyTxt = (t) => (TOUCH && t ? String(t).replace(/กด Space/g, 'กดปุ่ม ✋').replace(/^Space:\s*/, '✋ ').replace(/Space \/ E หรือ/g, 'ปุ่ม ✋ หรือ') : t);
 function toast(msg, cls = '') {
+  msg = keyTxt(msg);
   const el = document.createElement('div'); el.className = 'toast ' + cls; el.innerHTML = msg; $('toasts').appendChild(el);
   while ($('toasts').children.length > 4) $('toasts').firstChild.remove();
   setTimeout(() => el.classList.add('out'), 2600); setTimeout(() => el.remove(), 3100);
@@ -68,7 +72,7 @@ function countTo(k, from, to) {
 function xpSpark() { flyIcons('ic_star', $('lvl'), 3, () => { const l = $('lvl'); l.classList.remove('bump'); void l.offsetWidth; l.classList.add('bump'); }); }
 function lvBurst(lv) { const d = document.createElement('div'); d.className = 'lvup-burst'; d.innerHTML = `<div>เลเวล ${lv}!</div>`; document.body.appendChild(d); setTimeout(() => d.remove(), 1700); confetti(90); }
 function bumpRes(k) { const el = document.querySelector(`#res .r[data-k="${k}"]`); if (!el) return; el.classList.remove('bump'); void el.offsetWidth; el.classList.add('bump'); }
-function setHint(t) { if ($('hint').textContent !== t) $('hint').textContent = t || ''; }
+function setHint(t) { t = keyTxt(t); if ($('hint').textContent !== t) $('hint').textContent = t || ''; }
 function placeBar(on, name, move) { $('placebar').classList.toggle('hidden', !on); if (on) $('pl-text').innerHTML = (move ? '✋ ย้าย' : '🔨 วาง') + ` <b>${name}</b>: คลิกที่หญ้าว่าง (กรอบสีเขียว)`; }
 function confetti(n = 70) {
   const c = $('confetti'); const cols = ['#ffd27a', '#f2a03b', '#8fd05a', '#e7765a', '#a67ad8', '#7fc4ff'];
@@ -82,6 +86,14 @@ function hudLayout() {
   const h = $('hud'); if (!h || h.classList.contains('hidden')) return;
   const narrow = window.innerWidth < 760, top = Math.round(h.getBoundingClientRect().bottom + 8);
   $('quest').style.top = narrow ? top + 'px' : ''; $('side').style.top = narrow ? top + 'px' : '';
+  $('toasts').style.top = narrow ? top + 'px' : '';
+  // มือถือ: จอยสติ๊ก ปุ่ม ✋ และคำแนะนำ อยู่เหนือแถบเครื่องมือเสมอ (เดิมทับปุ่มมือ/ปุ่มย้าย)
+  if (TOUCH) {
+    const bar = [$('bottom'), $('fbar')].find((el) => el && !el.classList.contains('hidden'));
+    const above = bar ? Math.round(window.innerHeight - bar.getBoundingClientRect().top + 10) : 100;
+    $('hint').style.bottom = above + 'px';
+    $('joy').style.bottom = above + 34 + 'px'; $('act-btn').style.bottom = above + 40 + 'px';
+  }
 }
 window.addEventListener('resize', () => setTimeout(hudLayout, 50));
 function hud() {
@@ -106,7 +118,7 @@ function hud() {
   const ev = eventActive(); document.querySelector('#res .ev').classList.toggle('hidden', !ev); $('btn-event').classList.toggle('hidden', !ev);
   // ภารกิจ
   const sp = storyProgress();
-  if (sp) { $('q-ch').textContent = '🎯 ' + STORY[S.story.ch].ch; $('q-text').innerHTML = sp.st.t + ` <b>(${sp.v}/${sp.st.n})</b><div class="muted">รางวัล: ${Object.entries(sp.st.r).map(([k, v]) => iconHTML(k) + v).join(' ')}</div>`; $('q-fill').style.width = (sp.v / sp.st.n) * 100 + '%'; }
+  if (sp) { $('q-ch').textContent = '🎯 ' + STORY[S.story.ch].ch; $('q-text').innerHTML = keyTxt(sp.st.t) + ` <b>(${sp.v}/${sp.st.n})</b><div class="muted">รางวัล: ${Object.entries(sp.st.r).map(([k, v]) => iconHTML(k) + v).join(' ')}</div>`; $('q-fill').style.width = (sp.v / sp.st.n) * 100 + '%'; }
   else { $('q-ch').textContent = '🎯 เนื้อเรื่องจบแล้ว'; $('q-text').textContent = 'ยอดเยี่ยม! ทำภารกิจรายวันและแต่งหมู่บ้านต่อได้เลย'; $('q-fill').style.width = '100%'; }
   dailyReset();
   $('q-daily').innerHTML = '<b>📅 วันนี้</b>' + S.daily.quests.map((q) => `<div class="${q.done ? 'done' : ''}"><span>${q.t}</span><span>${q.prog}/${q.n}</span></div>`).join('');

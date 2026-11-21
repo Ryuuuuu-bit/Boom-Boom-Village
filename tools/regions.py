@@ -1,5 +1,7 @@
-"""Region map for chibi character frames, used for in-game recolouring (character creator).
-0 = keep, 1 = hair, 2 = skin, 3 = outfit (leaves), 4 = cape/cloth."""
+"""Region map v2 for chibi character frames (character creator recolouring).
+0 = keep, 1 = hair, 2 = skin, 3 = outfit (leaves), 4 = cape/cloth.
+v2: wider skin detection (arms/legs), cape/outfit kept only as large connected areas (no speckles),
+and masks are downscaled by majority vote instead of nearest-pixel sampling."""
 import numpy as np
 from PIL import Image
 from scipy import ndimage
@@ -14,8 +16,14 @@ def hsl(a):
     return np.where(d > 0, h, 0), s, l
 
 
+def keep_big(mask, min_px):
+    lab, n = ndimage.label(mask)
+    if not n: return mask
+    sizes = ndimage.sum(mask, lab, range(1, n + 1))
+    return np.isin(lab, [i + 1 for i, sz in enumerate(sizes) if sz >= min_px])
+
+
 def region_mask(a, view='south'):
-    """a: HxWx4 uint8 array of ONE character cell. Returns HxW uint8 region ids."""
     h, s, l = hsl(a)
     op = a[:, :, 3] > 40
     H = a.shape[0]
@@ -23,8 +31,9 @@ def region_mask(a, view='south'):
     if not len(ys): return np.zeros(a.shape[:2], np.uint8)
     top, bot = ys.min(), ys.max()
     yrel = np.broadcast_to((np.arange(H)[:, None] - top) / max(1, bot - top), op.shape)
+    area = op.sum()
     m = np.zeros(a.shape[:2], np.uint8)
-    # ผม: กลุ่มพิกเซลสีน้ำตาลเข้มที่ต่อกันจากด้านบนของหัว (ไม่รวมรองเท้า/เข็มขัดด้านล่าง)
+    # ผม (เหมือนเดิม)
     brown = op & (h >= 6) & (h <= 34) & (s > 0.2) & (s < 0.62) & (l > 0.12) & (l < 0.52)
     lab, n = ndimage.label(brown)
     hair = np.zeros_like(brown)
@@ -34,28 +43,34 @@ def region_mask(a, view='south'):
         if yrel[sl][comp].min() < 0.30 and yrel[sl][comp].mean() < 0.62: hair[sl] |= comp
     hair = ndimage.binary_closing(hair, iterations=1) & brown
     m[hair] = 1
-    # ผิว: สีพีช (ไม่รวมขนสัตว์ที่สว่างมาก) + เงาผิวที่ติดกัน
-    skin = op & ~hair & (h >= 8) & (h <= 28) & (s > 0.7) & (l >= 0.55) & (l < 0.84) & (yrel > 0.18)
-    skin &= ~((l > 0.74) & ((h > 27.5) | (s < 0.85)))
-    near = ndimage.binary_dilation(skin, iterations=2)
-    skin |= near & op & ~hair & (h >= 14) & (h <= 28) & (s > 0.7) & (l >= 0.45) & (l < 0.55)
-    # หน้า: พิกเซลพีชสว่างช่วงหัวเป็นผิวทั้งหมด (ขนสัตว์อยู่ต่ำกว่า) + อุดรูในผิว ไม่ให้เป็นจุดด่างตอนเปลี่ยนสีผิว
-    peach = op & ~hair & (h >= 5) & (h <= 34) & (s > 0.4) & (l > 0.42) & (l < 0.93)
-    skin |= peach & (yrel > 0.18) & (yrel < 0.5) & (l < 0.9)
-    skin = (ndimage.binary_closing(skin, iterations=2) | ndimage.binary_fill_holes(skin)) & peach
+    # ผ้าคลุม/กระโปรงส้มแดง (หาก่อนผิว เพราะสีใกล้กัน: ผ้าแดงกว่าและเข้มกว่าผิว) เฉพาะก้อนใหญ่
+    cape = op & ~hair & ((h <= 17) | (h > 340)) & (s > 0.45) & (l > 0.22) & (l < 0.64) & (yrel > 0.36)
+    cape = keep_big(ndimage.binary_closing(cape, iterations=1) & op & ~hair, max(40, area * 0.012))
+    m[cape] = 4
+    # ผิว: พีชสว่าง (หน้า แขน ขา) ไม่รวมขนสัตว์สีครีมจาง ๆ และผ้าคลุม
+    peach = op & ~hair & ~cape & (h >= 6) & (h <= 32) & (l > 0.40) & (l < 0.90)
+    fur = (s < 0.55) & (l > 0.70)
+    core = peach & ~fur & (h >= 15) & (s > 0.6) & (l >= 0.56) & (yrel > 0.16)
+    core = keep_big(core, max(12, area * 0.002))
+    grow = peach & ~fur & (s > 0.45) & (yrel > 0.16)
+    skin = core.copy()
+    for _ in range(3): skin |= ndimage.binary_dilation(skin) & grow
+    skin = (ndimage.binary_closing(skin, iterations=2) | ndimage.binary_fill_holes(skin)) & peach & ~fur
+    if view == 'north' and cape.any():  # ด้านหลัง: ลายขอบผ้าคลุมสีครีมไม่ใช่ผิว (ผิวมีแค่ใบหูกับขาใต้ผ้า)
+        cy = np.where(cape.any(1))[0]; cx = np.where(cape.any(0))[0]
+        band = np.zeros_like(skin); band[cy.min():cy.max() + max(3, (bot - top) // 25), cx.min():cx.max() + 1] = True
+        skin &= ~band
     m[skin] = 2
-    # ชุดใบไม้ (ใต้หัว)
-    m[op & (m == 0) & (h > 44) & (h < 150) & (s > 0.18) & (l > 0.12) & (yrel > 0.38)] = 3
-    # ผ้าคลุม/กระโปรงสีส้มแดง (ใต้หัว)
-    m[op & (m == 0) & ((h < 22) | (h > 340)) & (s > 0.5) & (l > 0.22) & (l < 0.66) & (yrel > 0.36)] = 4
+    # ชุดใบไม้: เขียว/เขียวเหลือง ใต้หัว เฉพาะก้อนใหญ่
+    leaf = op & (m == 0) & (h > 40) & (h < 150) & (s > 0.18) & (l > 0.12) & (yrel > 0.38)
+    leaf = keep_big(ndimage.binary_closing(leaf, iterations=1) & op & (m == 0), max(20, area * 0.006))
+    m[leaf] = 3
     return m
 
 
-def region_sheet(sheet, fw, views):
-    """sheet: PIL RGBA. views: dict row -> view. Returns region image (L mode, value = id*60 for preview-friendly)."""
-    a = np.array(sheet); out = np.zeros(a.shape[:2], np.uint8)
-    for r, v in views.items():
-        for c in range(a.shape[1] // fw):
-            cell = a[r * fw:(r + 1) * fw, c * fw:(c + 1) * fw]
-            out[r * fw:(r + 1) * fw, c * fw:(c + 1) * fw] = region_mask(cell, v)
-    return out
+def downsample(mask, size):
+    """ย่อแผนที่ส่วนแบบเสียงข้างมาก (ไม่ใช่สุ่มพิกเซล) ให้ขอบเรียบ ไม่เป็นจุดด่าง"""
+    cov = np.stack([np.asarray(Image.fromarray(((mask == k) * 255).astype(np.uint8)).resize(size, Image.BOX), float) for k in range(5)])
+    out = cov.argmax(0).astype(np.uint8)
+    out[cov.max(0) < 90] = 0
+    return Image.fromarray(out * 60)

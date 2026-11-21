@@ -57,13 +57,40 @@ async function init() {
     );
     CREATE INDEX IF NOT EXISTS ve_target ON village_events(target_id, applied);
     CREATE INDEX IF NOT EXISTS ve_actor_day ON village_events(actor_id, day);
+    -- กันโกง: ถังโควตาของแต่ละเซฟ + บันทึกเซฟที่ถูกตัดตัวเลข
+    ALTER TABLE saves ADD COLUMN IF NOT EXISTS guard JSONB;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS tester BOOLEAN NOT NULL DEFAULT FALSE;
+    CREATE TABLE IF NOT EXISTS cheat_log (
+      id BIGSERIAL PRIMARY KEY,
+      user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      notes TEXT NOT NULL,
+      fixed JSONB NOT NULL DEFAULT '{}',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS cheat_log_user ON cheat_log(user_id);
   `);
   await p.query('DELETE FROM sessions WHERE expires_at < now()');
   await p.query("DELETE FROM village_events WHERE applied AND created_at < now() - interval '14 days'");
   pool = p;
   console.log('[db] ready');
+  cleanup().catch((e) => console.error('[db] cleanup', e.message));
+  setInterval(() => cleanup().catch((e) => console.error('[db] cleanup', e.message)), 24 * 3600e3).unref();
   return true;
 }
 
+// ลบบัญชี Guest ที่ทิ้งไว้ (ไม่ผูกอีเมล/Facebook และไม่ใช่ผู้ทดสอบ)
+//  - ไม่เคยเริ่มเล่นเลย (ไม่มีเซฟ) และไม่ได้เข้าเกิน 7 วัน
+//  - เลเวลต่ำกว่า 5 และไม่ได้เข้าเกิน 60 วัน
+// บัญชีที่เลเวล 5 ขึ้นไปเก็บไว้เสมอ เพื่อนที่เคยเพิ่มไว้จะหายไปพร้อมบัญชีที่ถูกลบ
+async function cleanup() {
+  const r = await pool.query(`DELETE FROM users u WHERE u.email IS NULL AND u.fb_id IS NULL AND NOT u.tester AND (
+      (NOT EXISTS (SELECT 1 FROM saves s WHERE s.user_id = u.id) AND u.last_login < now() - interval '7 days')
+      OR EXISTS (SELECT 1 FROM saves s WHERE s.user_id = u.id AND COALESCE(s.level, 1) < 5 AND GREATEST(s.updated_at, u.last_login) < now() - interval '60 days'))`);
+  await pool.query('DELETE FROM sessions WHERE expires_at < now()');
+  await pool.query("DELETE FROM cheat_log WHERE created_at < now() - interval '90 days'");
+  if (r.rowCount) console.log(`[db] cleanup: removed ${r.rowCount} abandoned guest accounts`);
+  return r.rowCount;
+}
+
 const q = (text, params) => pool.query(text, params);
-module.exports = { init, enabled, q };
+module.exports = { init, enabled, q, cleanup };

@@ -6,12 +6,17 @@ const path = require('path');
 const crypto = require('crypto');
 const zlib = require('zlib');
 const db = require('./db');
+const guard = require('./guard');
 
 const ROOT = __dirname;
 const PORT = process.env.PORT || 3000;
 const FB_APP_ID = process.env.FB_APP_ID || '';
 const FB_APP_SECRET = process.env.FB_APP_SECRET || '';
 const SESSION_DAYS = 90;
+// บัญชีผู้ทดสอบ (เห็นปุ่มข้ามเวลา และไม่โดนระบบกันโกงตัดตัวเลข) ใส่ใน Railway ได้ เช่น TESTER_EMAILS=a@b.com,c@d.com หรือ TESTER_IDS=1,5
+const TESTER_EMAILS = new Set(String(process.env.TESTER_EMAILS || '').toLowerCase().split(',').map((x) => x.trim()).filter(Boolean));
+const TESTER_IDS = new Set(String(process.env.TESTER_IDS || '').split(',').map((x) => x.trim()).filter(Boolean));
+const isTester = (u) => !!(u && (u.tester || TESTER_IDS.has(String(u.id)) || (u.email && TESTER_EMAILS.has(u.email))));
 const MAX_BODY = 2 * 1024 * 1024;
 const TYPES = {
   '.html': 'text/html; charset=utf-8', '.js': 'application/javascript; charset=utf-8',
@@ -20,7 +25,7 @@ const TYPES = {
   '.ogg': 'audio/ogg', '.wav': 'audio/wav', '.txt': 'text/plain; charset=utf-8', '.ico': 'image/x-icon',
   '.woff2': 'font/woff2',
 };
-const BLOCKED = new Set(['server.js', 'db.js', 'package.json', 'package-lock.json', 'tools', 'node_modules', 'test']);
+const BLOCKED = new Set(['server.js', 'db.js', 'guard.js', 'package.json', 'package-lock.json', 'tools', 'node_modules', 'test']);
 
 // ---------- helpers ----------
 const sha = (s) => crypto.createHash('sha256').update(s).digest('hex');
@@ -80,7 +85,7 @@ const cleanName = (s) => String(s || '').replace(/[\u0000-\u001f<>"'&`]/g, '').t
 const cleanEmail = (s) => String(s || '').trim().toLowerCase().slice(0, 200);
 const okEmail = (e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
 const randomName = () => 'หัวหน้าเผ่า' + (1000 + Math.floor(Math.random() * 9000));
-const pubUser = (u) => ({ id: String(u.id), name: u.name, email: u.email || null, facebook: !!u.fb_id, guest: !u.email && !u.fb_id });
+const pubUser = (u) => ({ id: String(u.id), name: u.name, email: u.email || null, facebook: !!u.fb_id, guest: !u.email && !u.fb_id, tester: isTester(u) });
 
 async function newSession(userId) {
   const token = crypto.randomBytes(32).toString('base64url');
@@ -90,8 +95,14 @@ async function newSession(userId) {
 }
 async function userFromToken(token) {
   if (!token || token.length > 100) return null;
-  const r = await db.q('SELECT u.* FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = $1 AND s.expires_at > now()', [sha(token)]);
-  return r.rows[0] || null;
+  const r = await db.q('SELECT u.*, s.expires_at AS s_exp FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = $1 AND s.expires_at > now()', [sha(token)]);
+  const u = r.rows[0]; if (!u) return null;
+  // ต่ออายุ session ให้คนที่ยังเล่นอยู่ (Guest ไม่มีรหัสผ่าน ถ้า session หมดอายุจะกลับเข้าบัญชีเดิมไม่ได้)
+  if (new Date(u.s_exp).getTime() - Date.now() < (SESSION_DAYS - 1) * 86400e3) {
+    db.q(`UPDATE sessions SET expires_at = now() + interval '${SESSION_DAYS} days' WHERE token_hash = $1`, [sha(token)]).catch(() => {});
+    db.q('UPDATE users SET last_login = now() WHERE id = $1', [u.id]).catch(() => {});
+  }
+  return u;
 }
 const bearer = (req) => { const h = req.headers.authorization || ''; return h.startsWith('Bearer ') ? h.slice(7) : null; };
 async function needUser(req, body) {
@@ -219,18 +230,32 @@ const API = {
     const data = b.data;
     if (!data || typeof data !== 'object' || data.v !== 2) fail(400, 'bad_save', 'ข้อมูลเซฟไม่ถูกต้อง');
     const rev = Number(b.rev) || 0;
-    const level = Number.isFinite(+data.level) ? Math.floor(+data.level) : null;
+    // กันโกง: เทียบกับเซฟเดิมบนเซิร์ฟเวอร์ (เซฟใหม่เทียบกับค่าเริ่มเกม)
+    const old = rev === 0 ? null : (await db.q(`SELECT guard, jsonb_build_object('shells', data->'shells', 'amber', data->'amber', 'feathers', data->'feathers', 'event', data->'event',
+        'level', data->'level', 'xp', data->'xp', 'era', data->'era', 'storageLvl', data->'storageLvl') AS base FROM saves WHERE user_id = $1 AND rev = $2`, [u.id, rev])).rows[0];
+    let chk = { guard: old && old.guard, fixed: null, notes: [] };
+    if (rev === 0 || old) {
+      const before = isTester(u) ? JSON.parse(JSON.stringify(data)) : null;
+      chk = guard.check(data, old ? old.base : null, old && old.guard, Date.now());
+      if (before) { b.data = before; chk.fixed = null; chk.notes = []; } // ผู้ทดสอบ: ไม่ตัดตัวเลข
+    }
+    const saveData = b.data;
+    if (chk.notes.length) {
+      console.warn('[guard]', u.id, chk.notes.join(' '));
+      db.q('INSERT INTO cheat_log (user_id, notes, fixed) VALUES ($1, $2, $3)', [u.id, chk.notes.join(' '), chk.fixed || {}]).catch(() => {});
+    }
+    const level = Number.isFinite(+saveData.level) ? Math.floor(+saveData.level) : null;
     let r;
     if (rev === 0) {
-      r = await db.q('INSERT INTO saves (user_id, data, rev, level) VALUES ($1, $2, 1, $3) ON CONFLICT (user_id) DO NOTHING RETURNING rev', [u.id, data, level]);
+      r = await db.q('INSERT INTO saves (user_id, data, rev, level, guard) VALUES ($1, $2, 1, $3, $4) ON CONFLICT (user_id) DO NOTHING RETURNING rev', [u.id, saveData, level, chk.guard]);
     } else {
-      r = await db.q('UPDATE saves SET data = $2, rev = rev + 1, level = $4, updated_at = now() WHERE user_id = $1 AND rev = $3 RETURNING rev', [u.id, data, rev, level]);
+      r = await db.q('UPDATE saves SET data = $2, rev = rev + 1, level = $4, guard = $5, updated_at = now() WHERE user_id = $1 AND rev = $3 RETURNING rev', [u.id, saveData, rev, level, chk.guard]);
     }
     if (!r.rowCount) {
       const cur = await db.q('SELECT rev FROM saves WHERE user_id = $1', [u.id]);
       return send(res, 409, { error: 'conflict', rev: cur.rows[0] ? cur.rows[0].rev : 0, message: 'เกมนี้ถูกเปิดเล่นจากอีกแท็บหรืออีกเครื่อง' });
     }
-    return { ok: true, rev: r.rows[0].rev };
+    return chk.fixed ? { ok: true, rev: r.rows[0].rev, fixed: chk.fixed } : { ok: true, rev: r.rows[0].rev };
   },
 
   // เริ่มเกมใหม่ (ลบเซฟบนเซิร์ฟเวอร์)

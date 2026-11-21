@@ -101,6 +101,13 @@ async function authPush(keepalive, retried) {
     S._dev = DEVICE;
     const r = await api('PUT', '/api/save', { data: S, rev: AUTH.rev }, { keepalive: keepalive && JSON.stringify(S).length < 60000 });
     AUTH.rev = r.rev; LS.set('bbv_rev_u' + AUTH.user.id, String(r.rev)); AUTH.failCount = 0;
+    // เซิร์ฟเวอร์พบตัวเลขที่ขึ้นเร็วเกินจริง และปรับให้แล้ว: ใช้ค่าตามเซิร์ฟเวอร์
+    if (r.fixed) {
+      for (const [k, v] of Object.entries(r.fixed)) { if (k === 'coins') S.event.coins = v; else S[k] = v; }
+      try { localStorage.setItem(SAVE_KEY, JSON.stringify(S)); } catch (e) {}
+      if (typeof hud === 'function') hud();
+      toast('⚠️ ตัวเลขบางอย่างในเกมผิดปกติ ระบบปรับให้ตรงกับเซิร์ฟเวอร์แล้ว', 'bad');
+    }
   } catch (e) {
     // ชนกับเซฟของเบราว์เซอร์เดียวกัน (เช่นตอนรีเฟรช) ใช้ต่อได้ ถ้ามาจากเครื่องอื่นให้หยุด
     let own = false;

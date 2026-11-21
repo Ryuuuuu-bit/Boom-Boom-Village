@@ -442,6 +442,8 @@ PANELS.event = () => {
     html += `<div class="card"><div class="pic">${s.b ? IMG(BUILDS[s.b].img, '') : IMG(s.amber ? 'ic_amber' : 'ic_feather')}</div><div class="nm">${nm}</div>${s.b ? `<div class="ds">ความสวย +${BUILDS[s.b].beauty}</div>` : ''}<button class="btn purple sm" data-a="buy" data-v="${i}" ${S.event.coins >= s.cost ? '' : 'disabled'}>${iconHTML('coins')}${s.cost}</button></div>`; });
   return { title: `🛶 เทศกาล${ev.n}`, html: html + '</div>', acts: { buy: (i) => { const s = ev.shop[+i]; if (!pay({ coins: s.cost })) return; if (s.b) { S.bag[s.b] = (S.bag[s.b] || 0) + 1; toast(`ได้${BUILDS[s.b].n} อยู่ในกระเป๋า (เมนู 🔨 › 🎒)`, 'good'); } else grant(s.amber ? { amber: s.amber } : { feathers: s.feathers }); sfx('chest'); renderPanel(); hud(); } } };
 };
+// ปุ่มข้ามเวลา: เฉพาะบัญชีผู้ทดสอบ หรือเปิดเกมจากไฟล์ในเครื่อง (ออฟไลน์)
+const isTester = () => location.protocol === 'file:' || (typeof AUTH !== 'undefined' && !!(AUTH.user && AUTH.user.tester));
 // --- ตั้งค่า ---
 PANELS.settings = () => {
   const canPeace = S.peacefulDay !== dayKey();
@@ -450,14 +452,14 @@ PANELS.settings = () => {
     <div class="row"><div class="grow">🔊 เสียงเอฟเฟกต์</div><button class="btn sm" data-a="sfx">${S.settings.sfx ? 'เปิดอยู่' : 'ปิดอยู่'}</button></div>
     <div class="row"><div class="grow">🕊️ โหมดหมู่บ้านสงบ<div class="muted">เปิดแล้วไม่มีใครแกล้งเรา และเราก็แกล้งใครไม่ได้ (สลับได้วันละ 1 ครั้ง)</div></div><button class="btn sm ${S.peaceful ? 'green' : ''}" data-a="peace" ${canPeace ? '' : 'disabled'}>${S.peaceful ? 'เปิดอยู่' : 'ปิดอยู่'}</button></div>
     <div class="row"><div class="grow">💾 บันทึกเกมอัตโนมัติ${AUTH.online ? ' (เซฟขึ้นเซิร์ฟเวอร์)' : 'ในเบราว์เซอร์นี้'}</div><button class="btn sm" data-a="save">บันทึกตอนนี้</button></div>
-    <div class="row"><div class="grow">🧪 โหมดทดสอบ: ข้ามเวลา 1 ชั่วโมง<div class="muted">สำหรับลองเล่น ให้ผัก/สัตว์/โรงงานโตเร็ว</div></div><button class="btn sm" data-a="skip">⏩ +1 ชม.</button></div>
+` + (isTester() ? `<div class="row"><div class="grow">🧪 โหมดทดสอบ: ข้ามเวลา 1 ชั่วโมง<div class="muted">สำหรับลองเล่น ให้ผัก/สัตว์/โรงงานโตเร็ว</div></div><button class="btn sm" data-a="skip">⏩ +1 ชม.</button></div>` : '') + `
     <div class="row"><div class="grow">🗑️ เริ่มเกมใหม่ทั้งหมด</div><button class="btn red sm" data-a="reset">ลบเซฟ</button></div>`;
   return { title: '⚙️ ตั้งค่า', html, narrow: true, acts: {
     mus: () => { S.settings.music = !S.settings.music; mark(); renderPanel(); }, sfx: () => { S.settings.sfx = !S.settings.sfx; mark(); renderPanel(); },
     peace: () => { S.peaceful = !S.peaceful; S.peacefulDay = dayKey(); mark(); toast(S.peaceful ? '🕊️ เปิดโหมดหมู่บ้านสงบแล้ว' : 'ปิดโหมดสงบ เพื่อน ๆ แกล้งได้แล้ว 😈'); renderPanel(); hud(); },
     save: async () => { save(); if (AUTH.online) { clearTimeout(AUTH.timer); AUTH.timer = null; await authPush(); } toast('💾 บันทึกแล้ว', 'good'); },
     account: () => openPanel('account'), look: () => openLook(),
-    skip: () => { timeSkip(HOUR); toast('⏩ ข้ามเวลาไป 1 ชั่วโมง', 'good'); },
+    skip: () => { if (!isTester()) return; timeSkip(HOUR); toast('⏩ ข้ามเวลาไป 1 ชั่วโมง', 'good'); },
     reset: () => { if (PANEL.confirmReset) { authResetSave(); } else { PANEL.confirmReset = true; toast('กด "ลบเซฟ" อีกครั้งเพื่อยืนยัน', 'bad'); } },
   } };
 };

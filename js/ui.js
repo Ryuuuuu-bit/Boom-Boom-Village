@@ -1,7 +1,7 @@
 /* Boom Boom Village — หน้าจอเมนู แถบสถานะ หน้าต่างต่าง ๆ (HTML) */
 'use strict';
 const $ = (id) => document.getElementById(id);
-const IMG = (k, cls = 'icb') => (A.images[k] ? `<img class="${cls}" src="${A.images[k]}" alt="">` : '');
+const IMG = (k, cls = 'icb') => (A.images[k] ? `<img class="${cls}${A.hd && A.hd[k] ? ' hd' : ''}" src="${A.images[k]}" alt="">` : '');
 const costHTML = (c) => Object.entries(c || {}).filter(([, v]) => v).map(([k, v]) => `<span style="color:${have(k) >= v ? 'inherit' : '#d4573b'}">${iconHTML(k)}${v}</span>`).join(' ');
 const fmtNum = (n) => (n >= 10000 ? (n / 1000).toFixed(1) + 'k' : String(n));
 let TOOL = 'hand';
@@ -221,7 +221,7 @@ PANELS.plot = (key) => {
   const p = S.plots[key]; if (!p || plotState(p) !== 'grow') return null;
   const t = now(); const c = CROPS[p.crop]; const ra = plotReadyAt(p, t); const left = ra - t; const cost = speedCost(left); const f = plotFrac(p, t);
   const fl = plotFlags(p, t); const q = plotQuality(p, t); const Q = QUALITY[q];
-  const stages = [0, 1, 2, 3, 4].map((i) => `<img src="${A.images['stg_' + p.crop + '_' + i]}" style="width:40px;height:40px;image-rendering:pixelated;${i === plotStage(p, t) ? 'background:#ffe9a8;border-radius:8px;outline:2px solid #f2b84b' : 'opacity:.45'}">`).join('');
+  const stages = [0, 1, 2, 3, 4].map((i) => `<img src="${A.images['stg_' + p.crop + '_' + i]}" style="width:40px;height:40px;object-fit:contain;${i === plotStage(p, t) ? 'background:#ffe9a8;border-radius:8px;outline:2px solid #f2b84b' : 'opacity:.45'}">`).join('');
   const wet = fl.wet ? `💧 ดินชุ่ม อีก <b>${fmtDur(p.wetUntil - t)}</b> จะแห้ง` : `🏜️ <b>ดินแห้ง!</b> โตช้าลงเหลือ ${Math.round(CFG.DRY_RATE * 100)}% · รดน้ำด่วน`;
   const regrow = c.regrow ? `<div class="muted">🌿 ผักเก็บซ้ำได้ ${c.regrow} ครั้ง (เก็บไปแล้ว ${p.h || 0})</div>` : '';
   return { title: `${IMG(ITEMS[p.crop].icon)} ${c.n}`, narrow: true, live: true, html: `<div style="display:flex;justify-content:center;gap:2px;margin-bottom:6px">${stages}</div>

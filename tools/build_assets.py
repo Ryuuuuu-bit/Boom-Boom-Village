@@ -28,7 +28,7 @@ sizes = {}
 if os.path.exists(os.path.join(A, 'hd', 'sizes.json')): sizes = json.load(open(os.path.join(A, 'hd', 'sizes.json')))
 for f in sorted(glob.glob(os.path.join(A, 'hd', '*.png'))):
     k = os.path.basename(f)[:-4]
-    if k.endswith('_sheet'): continue
+    if k.endswith('_sheet') or k.startswith('ch_'): continue
     im = Image.open(f).convert('RGBA')
     keep = k.startswith('stg_') or k in KEEP or k == 'soil_dry'
     if not keep:
@@ -56,6 +56,28 @@ for r in range(src.height // 48):
         if not bb: continue
         sheet.alpha_composite(cell, (c * 48, r * 48 + (46 - bb[3])))
 out['sheets']['villager'] = {'uri': uri(sheet), 'w': 48, 'h': 48}
+# ตัวละคร chibi: สร้างสไปรต์ชีตเลย์เอาต์เดียวกับ villager (แถวละ 6 เฟรม) จากภาพนิ่ง 4 ทิศ + ขยับเด้งเป็นท่าเดิน/หายใจ
+if os.path.exists(os.path.join(A, 'hd', 'ch_south.png')):
+    import math
+    FW = 96; CH_H = 84  # เฟรม 96x96 (แสดง 48x48), ตัวสูง ~42px บนจอ
+    poses = {}
+    for d in ['south', 'west', 'east', 'north']:
+        im = Image.open(os.path.join(A, 'hd', 'ch_%s.png' % d)).convert('RGBA'); im = im.crop(im.getbbox())
+        poses[d] = im.resize((round(im.width * CH_H / im.height), CH_H), Image.LANCZOS)
+    rows = {1: 'south', 2: 'west', 3: 'east', 4: 'north', 5: 'south', 6: 'west', 7: 'east', 8: 'north'}
+    hd = Image.new('RGBA', (FW * 6, FW * 9))
+    for r, d in rows.items():
+        for c in range(6):
+            im = poses[d]
+            if r <= 4:  # idle: หายใจ
+                sy = 1 - 0.025 * math.sin(c / 4 * 2 * math.pi); sx = 1 + 0.012 * math.sin(c / 4 * 2 * math.pi); bob = 0; rot = 0
+            else:  # walk: เด้ง + เอียง
+                ph = c / 6 * 2 * math.pi; bob = -abs(math.sin(ph)) * 6; sy = 1 - 0.03 * abs(math.cos(ph)); sx = 1; rot = 4 * math.sin(ph) if d in ('south', 'north') else 2.5 * math.sin(ph)
+            fr = im.resize((round(im.width * sx), round(im.height * sy)), Image.LANCZOS)
+            if rot: fr = fr.rotate(rot, resample=Image.BICUBIC, expand=True)
+            x = c * FW + (FW - fr.width) // 2; y = r * FW + 92 - fr.height + round(bob)
+            hd.alpha_composite(fr, (x, y))
+    out['sheets']['villager'] = {'uri': uri(hd), 'w': FW, 'h': FW, 'hd': 2}
 for n in ['dirt', 'soil', 'water']:
     out['sheets']['ts_' + n] = {'uri': uri(Image.open(os.path.join(A, 'tileset_grass_%s.png' % n)).convert('RGBA')), 'w': 32, 'h': 32}
     d = json.load(open(os.path.join(A, 'tileset_grass_%s.json' % n)))

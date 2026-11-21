@@ -27,7 +27,8 @@ function friendLayout(b) {
 // ภาพความละเอียดสูง (แบบ chibi): ย่อ "ขนาดเฟรม" ให้เท่าภาพเดิม แต่ยังวาดจากภาพจริงทั้งภาพ
 // โค้ดเกมจึงเห็นขนาดเท่าเดิมทุกอย่าง แต่บนจอได้ภาพคมชัด
 function applyHD(scene) {
-  const HD = A.hd || {};
+  const HD = Object.assign({}, A.hd || {});
+  for (const [k, sh] of Object.entries(A.sheets || {})) if (sh.hd) HD[k] = sh.hd;
   for (const [key, k] of Object.entries(HD)) {
     if (!scene.textures.exists(key)) continue;
     const tex = scene.textures.get(key);

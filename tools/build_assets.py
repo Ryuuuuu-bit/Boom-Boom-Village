@@ -5,7 +5,10 @@ G = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 A = os.path.join(G, 'assets')
 
 def uri(img):
-    b = io.BytesIO(); img.save(b, 'PNG')
+    # เลือกแบบที่ไฟล์เล็กกว่า: WebP (ย่อแบบเสียคุณภาพน้อยมาก) หรือ PNG
+    b = io.BytesIO(); img.save(b, 'PNG', optimize=True)
+    w = io.BytesIO(); img.save(w, 'WEBP', quality=86, method=6, alpha_quality=90)
+    if w.tell() < b.tell() * 0.9: return 'data:image/webp;base64,' + base64.b64encode(w.getvalue()).decode()
     return 'data:image/png;base64,' + base64.b64encode(b.getvalue()).decode()
 
 out = {'images': {}, 'sheets': {}, 'wang': {}, 'sounds': {}}

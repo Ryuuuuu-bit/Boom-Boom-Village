@@ -77,8 +77,16 @@ function confetti(n = 70) {
 
 // ---------- แถบสถานะ ----------
 let lastRes = {};
+// จอแคบ: แถบเงินขึ้น 2 แถว ให้กล่องภารกิจและปุ่มขวาเลื่อนลงไม่ทับ
+function hudLayout() {
+  const h = $('hud'); if (!h || h.classList.contains('hidden')) return;
+  const narrow = window.innerWidth < 760, top = Math.round(h.getBoundingClientRect().bottom + 8);
+  $('quest').style.top = narrow ? top + 'px' : ''; $('side').style.top = narrow ? top + 'px' : '';
+}
+window.addEventListener('resize', () => setTimeout(hudLayout, 50));
 function hud() {
   if (!S) return;
+  hudLayout();
   $('lvl').textContent = S.level;
   $('pname').textContent = (S.title ? `「${S.title}」 ` : '') + ((typeof AUTH !== 'undefined' && AUTH.user && AUTH.user.name) || 'หัวหน้าเผ่า') + ' · ' + ERAS[S.era - 1].n;
   const need = XP_NEED(S.level); $('xpfill').style.width = Math.min(100, (S.xp / need) * 100) + '%';

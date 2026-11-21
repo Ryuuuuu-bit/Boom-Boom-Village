@@ -162,7 +162,7 @@ PANELS.look = (arg, P) => {
       <div class="lk-act"><button class="btn sm" data-a="rand">🎲 สุ่ม</button><button class="btn gold" data-a="ok">${first ? '✔ เริ่มผจญภัย!' : '✔ บันทึก'}</button></div>
     </div></div>`;
   setTimeout(lookPreview, 0);
-  const sync = () => { const el = $('lk-name'); if (el) L.name = el.value.trim().slice(0, 16); };
+  const sync = () => { const el = $('lk-name'); if (el) L.name = el.value.replace(/[\u0000-\u001f<>"'&`]/g, '').trim().slice(0, 16); };
   return {
     title: first ? '🧑 สร้างตัวละครของคุณ' : '🧑 แต่งตัวละคร', html,
     onClose: () => { LOOK_DRAFT = null; if (LOOK_PREV) { cancelAnimationFrame(LOOK_PREV.raf); LOOK_PREV = null; } if (!S.look) { S.look = defaultLook(); mark(); save(); } const f = LOOK_AFTER; LOOK_AFTER = null; if (f) setTimeout(f, 50); },
@@ -171,13 +171,13 @@ PANELS.look = (arg, P) => {
       pick: (v) => { sync(); const [p, id] = v.split(':'); L[p] = id; sfx('ui'); renderPanel(); },
       turn: (v) => { if (LOOK_PREV) LOOK_PREV.dir = (LOOK_PREV.dir + Number(v) + 4) % 4; },
       rand: () => { sync(); const r = (a) => a[Math.floor(Math.random() * a.length)].id; L.g = Math.random() < 0.5 ? 'm' : 'f'; for (const p of ['hair', 'skin', 'outfit', 'cape']) L[p] = r(LOOK_OPTS[p]); sfx('ui'); renderPanel(); },
-      ok: () => { sync(); S.look = { g: L.g, hair: L.hair, skin: L.skin, outfit: L.outfit, cape: L.cape, name: L.name }; mark(); save(); applyLook(); sfx('coin'); toast('✨ แต่งตัวเสร็จแล้ว ' + esc(lookName()) + '!', 'good'); closePanel(); },
+      ok: () => { sync(); S.look = { g: L.g, hair: L.hair, skin: L.skin, outfit: L.outfit, cape: L.cape, name: L.name }; mark(); save(); applyLook(); syncLookName(); sfx('coin'); toast('✨ แต่งตัวเสร็จแล้ว ' + esc(lookName()) + '!', 'good'); closePanel(); },
     },
   };
 };
 // ตัวอย่างเดินวนในหน้าต่าง (หมุนดูได้ 4 ทิศ)
 function lookPreview() {
-  const cv = $('lk-cv'); if (!cv) return;
+  const cv = $('lk-cv'); if (!cv || !LOOK_DRAFT) return;
   const sheet = buildLookCanvas(LOOK_DRAFT); if (!sheet) return;
   const dir = LOOK_PREV ? LOOK_PREV.dir : 0;
   if (LOOK_PREV) cancelAnimationFrame(LOOK_PREV.raf);
@@ -193,5 +193,11 @@ function lookPreview() {
     LOOK_PREV.raf = requestAnimationFrame(draw);
   };
   LOOK_PREV.raf = requestAnimationFrame(draw);
+}
+// ชื่อตัวละครที่ตั้งในหน้าแต่งตัว = ชื่อบัญชี (เพื่อนเห็นชื่อนี้ในรายชื่อเพื่อน/บันทึกหมู่บ้าน และแถบบนสุด)
+async function syncLookName() {
+  const n = S && S.look && S.look.name;
+  if (!n || typeof AUTH === 'undefined' || !AUTH.online || !AUTH.user || AUTH.user.name === n) return;
+  try { const r = await api('POST', '/api/me', { name: n }); AUTH.user = r.user; hud(); } catch (e) {}
 }
 function openLook() { LOOK_DRAFT = null; openPanel('look'); }

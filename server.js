@@ -4,6 +4,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const zlib = require('zlib');
 const db = require('./db');
 
 const ROOT = __dirname;
@@ -57,10 +58,17 @@ function checkPass(pw, stored) {
   return want.length === h.length && crypto.timingSafeEqual(h, want);
 }
 
+// IP จริงของผู้เล่น: Railway ใส่ X-Real-IP ให้เอง (ห้ามใช้ค่าแรกของ X-Forwarded-For เพราะผู้เล่นปลอมได้)
+function clientIp(req) {
+  const real = String(req.headers['x-real-ip'] || '').trim();
+  if (real) return real;
+  const xff = String(req.headers['x-forwarded-for'] || '').split(',').map((x) => x.trim()).filter(Boolean);
+  return xff[xff.length - 1] || req.socket.remoteAddress || '?';
+}
 // simple per-IP rate limit for login endpoints
 const hits = new Map();
 function rateLimit(req, key, max, windowMs) {
-  const ip = (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.socket.remoteAddress || '?';
+  const ip = clientIp(req);
   const k = key + '|' + ip; const t = Date.now();
   const arr = (hits.get(k) || []).filter((x) => t - x < windowMs);
   arr.push(t); hits.set(k, arr);
@@ -122,6 +130,17 @@ async function friendOf(uid, fid) {
   const r = await db.q('SELECT u.* FROM friendships f JOIN users u ON u.id = f.friend_id WHERE f.user_id = $1 AND f.friend_id = $2', [uid, fid]);
   if (!r.rows[0]) fail(403, 'not_friend', 'ยังไม่ได้เป็นเพื่อนกัน');
   return r.rows[0];
+}
+
+// ทำทีละคำขอต่อผู้เล่น (กันยิงคำขอพร้อมกันหลายอันเพื่อข้ามโควตาช่วย/แกล้ง)
+const locks = new Map();
+async function withLock(key, fn) {
+  const prev = locks.get(key) || Promise.resolve();
+  let release; const mine = new Promise((r) => (release = r));
+  const chain = prev.then(() => mine);
+  locks.set(key, chain);
+  await prev;
+  try { return await fn(); } finally { release(); if (locks.get(key) === chain) locks.delete(key); }
 }
 
 // ---------- API ----------
@@ -269,6 +288,11 @@ const API = {
   'POST /api/village/act': async (req, res, b) => {
     const u = await needUser(req);
     rateLimit(req, 'act', 120, 3600e3);
+    return withLock('act' + u.id, () => villageAct(u, b));
+  },
+};
+async function villageAct(u, b) {
+  {
     const fid = Number(b.id) || 0;
     await friendOf(u.id, fid);
     const kind = b.kind === 'prank' ? 'prank' : 'help';
@@ -302,7 +326,9 @@ const API = {
     }
     const r = await db.q('INSERT INTO village_events (target_id, actor_id, kind, payload, day) VALUES ($1, $2, $3, $4, $5) RETURNING id', [fid, u.id, kind, { ...payload, kind: kind === 'prank' ? what : undefined, what }, day]);
     return { ok: true, id: 'ev' + r.rows[0].id };
-  },
+  }
+}
+Object.assign(API, {
   // เหตุการณ์ที่เพื่อนทำกับหมู่บ้านเรา (ยังไม่ได้รับ)
   'GET /api/events': async (req) => {
     const u = await needUser(req);
@@ -315,7 +341,7 @@ const API = {
     if (ids.length) await db.q('UPDATE village_events SET applied = TRUE WHERE target_id = $1 AND id = ANY($2::bigint[])', [u.id, ids]);
     return { ok: true };
   },
-};
+});
 API['POST /api/save'] = API['PUT /api/save']; // for navigator.sendBeacon / keepalive on page close
 
 async function handleApi(req, res, urlPath) {
@@ -343,6 +369,7 @@ function serveStatic(req, res, urlPath) {
   fs.stat(file, (err, st) => {
     if (err || !st.isFile()) { res.writeHead(404); return res.end('Not found'); }
     const ext = path.extname(file).toLowerCase();
+    if (GZ_TYPES.has(ext) && /\bgzip\b/.test(req.headers['accept-encoding'] || '')) return sendGz(req, res, file, st, ext);
     res.writeHead(200, {
       'Content-Type': TYPES[ext] || 'application/octet-stream',
       'Content-Length': st.size,
@@ -350,6 +377,28 @@ function serveStatic(req, res, urlPath) {
       'Cache-Control': ['.html', '.js', '.css'].includes(ext) ? 'no-cache' : 'public, max-age=3600',
     });
     fs.createReadStream(file).pipe(res);
+  });
+}
+
+// บีบอัดไฟล์ข้อความ (js/css/html/json) ก่อนส่ง โหลดเร็วขึ้นมากบนมือถือ เก็บไว้ในหน่วยความจำ
+const GZ_TYPES = new Set(['.html', '.js', '.css', '.json', '.txt', '.svg']);
+const gzCache = new Map();
+function sendGz(req, res, file, st, ext) {
+  const hit = gzCache.get(file);
+  const done = (buf) => {
+    res.writeHead(200, {
+      'Content-Type': TYPES[ext] || 'application/octet-stream', 'Content-Encoding': 'gzip', 'Content-Length': buf.length, Vary: 'Accept-Encoding',
+      'X-Content-Type-Options': 'nosniff', 'Cache-Control': ['.html', '.js', '.css'].includes(ext) ? 'no-cache' : 'public, max-age=3600',
+    });
+    res.end(req.method === 'HEAD' ? undefined : buf);
+  };
+  if (hit && hit.mtime === st.mtimeMs) return done(hit.buf);
+  fs.readFile(file, (err, raw) => {
+    if (err) { res.writeHead(404); return res.end('Not found'); }
+    zlib.gzip(raw, { level: 9 }, (e2, buf) => {
+      if (e2) { res.writeHead(500); return res.end(); }
+      gzCache.set(file, { mtime: st.mtimeMs, buf }); done(buf);
+    });
   });
 }
 
@@ -362,6 +411,8 @@ const server = http.createServer((req, res) => {
   serveStatic(req, res, urlPath);
 });
 
+// ปิดเซิร์ฟเวอร์อย่างนุ่มนวลตอน Railway deploy ใหม่ (เดิมขึ้น npm error SIGTERM ใน log ทุกครั้ง)
+process.on('SIGTERM', () => { server.close(() => process.exit(0)); setTimeout(() => process.exit(0), 5000).unref(); });
 server.listen(PORT, () => console.log(`Boom Boom Village listening on ${PORT}`));
 // ต่อฐานข้อมูล (ลองซ้ำถ้าฐานข้อมูลยังไม่พร้อม เช่นตอนเพิ่งเปิดเครื่อง)
 (async function connectDb(attempt = 1) {

@@ -531,3 +531,9 @@ body:has(#modal:not(.hidden)) #toasts { top: auto; bottom: 18px; }
 .lk-sw .sw.on { box-shadow: 0 0 0 3px #ffcf3a, 0 0 0 5px var(--line), inset 0 -4px 0 rgba(0,0,0,.18); transform: scale(1.12); }
 .lk-row input { flex: 1 1 0; min-width: 0; font: inherit; padding: 7px 10px; border-radius: 10px; border: 2px solid var(--line); background: #fffaf0; }
 .lk-act { display: flex; justify-content: space-between; gap: 8px; margin-top: 4px; }
+
+/* QA: จอมือถือ ชื่อหน้าต่างยาวไม่ให้ถูกตัดเป็น "..." */
+@media (max-width: 760px) {
+  .m-head { padding: 8px 22px 10px; max-width: calc(100vw - 96px); }
+  #modal h2, #m-title { font-size: 16px; white-space: nowrap; }
+}

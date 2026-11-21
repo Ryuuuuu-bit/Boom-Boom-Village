@@ -2,7 +2,7 @@
 'use strict';
 // S ถูกตั้งหลังเข้าสู่ระบบ (ดู js/auth.js)
 let firstRun = false, awaySince = 0;
-const authReady = authBoot().then(() => { firstRun = !S.welcomed; awaySince = S.lastSeen; migratePlots(S); applyRain(); dailyReset(); friendsBoot(); if (AUTH.migrated) setTimeout(() => toast('☁️ ย้ายหมู่บ้านเดิมในเครื่องนี้ขึ้นบัญชีแล้ว', 'good'), 1500); });
+const authReady = authBoot().then(() => { firstRun = !S.welcomed; awaySince = S.lastSeen; migratePlots(S); applyRain(); dailyReset(); friendsBoot(); syncLookName(); if (AUTH.migrated) setTimeout(() => toast('☁️ ย้ายหมู่บ้านเดิมในเครื่องนี้ขึ้นบัญชีแล้ว', 'good'), 1500); });
 
 // ---------- เหตุการณ์ ----------
 let pendingLevel = [];

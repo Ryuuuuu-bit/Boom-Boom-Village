@@ -15,7 +15,7 @@ html, body { margin: 0; height: 100%; background: #20301a; overflow: hidden; use
 #game canvas { display: block; }
 .hidden { display: none !important; }
 button { font: inherit; cursor: pointer; color: inherit; }
-img { image-rendering: pixelated; }
+img { image-rendering: auto; }
 img.ic { width: 20px; height: 20px; vertical-align: -5px; margin-right: 1px; }
 img.icb { width: 30px; height: 30px; vertical-align: middle; }
 img.bi { width: 20px; height: 20px; vertical-align: -5px; margin: -4px 0; }
@@ -256,7 +256,7 @@ img.bi { width: 20px; height: 20px; vertical-align: -5px; margin: -4px 0; }
 
 /* ================= v4 overhaul: title key art, compact quest, juice ================= */
 #loading { background: #1d3a14; justify-content: flex-end; padding-bottom: 9vh; }
-#loading::before { inset: -4%; background: url(assets/ui/keyart.png) center / cover no-repeat; image-rendering: pixelated; animation: kenburns 26s ease-in-out infinite alternate; }
+#loading::before { inset: -4%; background: url(assets/ui/keyart.png) center / cover no-repeat; image-rendering: auto; animation: kenburns 26s ease-in-out infinite alternate; }
 #loading::after { content: ''; position: absolute; inset: 0; pointer-events: none;
   background: linear-gradient(180deg, rgba(10, 20, 6, .55) 0%, rgba(10, 20, 6, 0) 30%, rgba(10, 20, 6, 0) 50%, rgba(10, 20, 6, .78) 100%); }
 #loading > * { z-index: 1; }
@@ -277,7 +277,7 @@ img.bi { width: 20px; height: 20px; vertical-align: -5px; margin: -4px 0; }
 .chip:hover { transform: translateY(-2px); }
 
 /* เหรียญ/ไอคอนบินเข้าหลอด */
-.coinfly { position: fixed; width: 30px; height: 30px; z-index: 80; pointer-events: none; image-rendering: pixelated; filter: drop-shadow(0 3px 2px rgba(0, 0, 0, .35)); }
+.coinfly { position: fixed; width: 30px; height: 30px; z-index: 80; pointer-events: none; image-rendering: auto; filter: drop-shadow(0 3px 2px rgba(0, 0, 0, .35)); }
 #res .r b { display: inline-block; transition: color .2s; }
 #res .r.bump b { color: #fff2a0; }
 .lvup-burst { position: fixed; inset: 0; z-index: 75; pointer-events: none; display: flex; align-items: center; justify-content: center; }
@@ -323,7 +323,7 @@ img.bi { width: 20px; height: 20px; vertical-align: -5px; margin: -4px 0; }
    ชิ้นภาพอยู่ที่ assets/ui/skin/ สร้างด้วย tools/gen_ui_skin.py ขยาย x2 ด้วย border-image */
 :root { --ink: #4a2a14; --ink2: #7a5232; --line: #34190c; }
 .btn, .tabs button, .card, .ord, .wheel div, #modal .box, .m-head, .close, #res .r, .pinfo, #place, #quest, #side button, #tools, #menu,
-#tools button, #menu button, .toast, #talk .tbox, #talk-name, #fbar, .au-card, .au-in, .au-tabs button, .xpbar, .qbar, .pbar, #placebar, #hint, .section, .chip { image-rendering: pixelated; }
+#tools button, #menu button, .toast, #talk .tbox, #talk-name, #fbar, .au-card, .au-in, .au-tabs button, .xpbar, .qbar, .pbar, #placebar, #hint, .section, .chip { image-rendering: auto; }
 
 /* ปุ่ม */
 .btn { border: 3px solid; border-image: url(assets/ui/skin/btn_wood.png) 5 fill / 10px stretch; border-radius: 0; background: none;
@@ -344,11 +344,11 @@ img.bi { width: 20px; height: 20px; vertical-align: -5px; margin: -4px 0; }
 #modal .box { width: min(780px, 96vw); max-height: calc(88vh - 22px); border: 30px solid; border-radius: 0; box-shadow: none; animation: none;
   border-image: url(assets/ui/skin/frame.png) 16 fill / 32px round; background: none; padding: 30px 8px 22px; scrollbar-color: #b98a4e transparent; }
 #modal .box.narrow { width: min(480px, 96vw); }
-.m-zz { position: absolute; left: 22px; right: 22px; bottom: 10px; height: 18px; background: url(assets/ui/skin/zigzag.png) left / auto 100% repeat-x; image-rendering: pixelated; pointer-events: none; }
+.m-zz { position: absolute; left: 22px; right: 22px; bottom: 10px; height: 18px; background: url(assets/ui/skin/zigzag.png) left / auto 100% repeat-x; image-rendering: auto; pointer-events: none; }
 .m-head { position: absolute; top: 0; left: 50%; transform: translateX(-50%); margin: 0; z-index: 3; display: flex; align-items: center; gap: 8px; white-space: nowrap;
   padding: 10px 22px 12px; border: 6px solid; border-radius: 0; background: none; box-shadow: none; border-image: url(assets/ui/skin/plaque.png) 10 fill / 20px stretch;
   filter: drop-shadow(0 3px 0 rgba(40, 20, 6, .4)); max-width: calc(100% - 120px); }
-.m-head .orn { width: 26px; height: 26px; background: url(assets/ui/skin/ornament.png) center / contain no-repeat; image-rendering: pixelated; flex: none; }
+.m-head .orn { width: 26px; height: 26px; background: url(assets/ui/skin/ornament.png) center / contain no-repeat; image-rendering: auto; flex: none; }
 #modal h2 { color: #4a2410; -webkit-text-stroke: 0; font-size: 22px; font-weight: 800; text-shadow: 0 2px 0 rgba(255, 240, 200, .8); overflow: hidden; text-overflow: ellipsis; }
 #m-ic { width: 32px; height: 32px; margin: -4px 0; }
 .close { top: 24px; right: 4px; width: 44px; height: 44px; border: 3px solid; border-radius: 0; background: none; box-shadow: none;
@@ -376,8 +376,8 @@ img.bi { width: 20px; height: 20px; vertical-align: -5px; margin: -4px 0; }
 /* หลอด */
 .xpbar, .qbar, .pbar { border: 3px solid; border-radius: 0; background: none; border-image: url(assets/ui/skin/bar.png) 4 fill / 8px stretch; overflow: hidden; }
 .xpbar { height: 18px; } .qbar, .pbar { height: 16px; }
-#xpfill, .pbar > div { background: url(assets/ui/skin/fill_green.png) 0 0 / 8px 100% repeat-x; box-shadow: none; border-radius: 0; image-rendering: pixelated; }
-#q-fill { background: url(assets/ui/skin/fill_gold.png) 0 0 / 8px 100% repeat-x; box-shadow: none; image-rendering: pixelated; }
+#xpfill, .pbar > div { background: url(assets/ui/skin/fill_green.png) 0 0 / 8px 100% repeat-x; box-shadow: none; border-radius: 0; image-rendering: auto; }
+#q-fill { background: url(assets/ui/skin/fill_gold.png) 0 0 / 8px 100% repeat-x; box-shadow: none; image-rendering: auto; }
 #xptxt { line-height: 12px; }
 
 /* แถบบน */
@@ -454,10 +454,10 @@ body:has(#modal:not(.hidden)) #toasts { top: auto; bottom: 18px; }
 .au-big { font-size: 28px !important; padding: 12px 14px 16px !important; overflow: hidden; }
 .au-big::after, #loading .big::after { content: ''; position: absolute; inset: 0; background: linear-gradient(105deg, transparent 35%, rgba(255, 255, 255, .55) 50%, transparent 65%) -200% 0 / 200% 100% no-repeat; animation: shine 3s ease-in-out infinite; pointer-events: none; }
 #loading .tag { font-size: 16px; font-weight: 600; color: #fff3d0; text-shadow: 0 2px 0 rgba(0, 0, 0, .5); background: none; backdrop-filter: none; border: 6px solid;
-  border-image: url(assets/ui/skin/hud.png) 8 fill / 16px stretch; image-rendering: pixelated; border-radius: 0; padding: 4px 16px; }
-#loading .bar { border: 3px solid; border-radius: 0; background: none; border-image: url(assets/ui/skin/bar.png) 4 fill / 8px stretch; height: 22px; image-rendering: pixelated; }
-#load-bar { background: url(assets/ui/skin/fill_gold.png) 0 0 / 8px 100% repeat-x; border-radius: 0; box-shadow: none; image-rendering: pixelated; }
-#au-who { border: 6px solid; border-radius: 0; background: none; border-image: url(assets/ui/skin/hud.png) 8 fill / 16px stretch; image-rendering: pixelated; padding: 2px 12px; color: #fff3d0; }
+  border-image: url(assets/ui/skin/hud.png) 8 fill / 16px stretch; image-rendering: auto; border-radius: 0; padding: 4px 16px; }
+#loading .bar { border: 3px solid; border-radius: 0; background: none; border-image: url(assets/ui/skin/bar.png) 4 fill / 8px stretch; height: 22px; image-rendering: auto; }
+#load-bar { background: url(assets/ui/skin/fill_gold.png) 0 0 / 8px 100% repeat-x; border-radius: 0; box-shadow: none; image-rendering: auto; }
+#au-who { border: 6px solid; border-radius: 0; background: none; border-image: url(assets/ui/skin/hud.png) 8 fill / 16px stretch; image-rendering: auto; padding: 2px 12px; color: #fff3d0; }
 #loading .tiny { text-shadow: 0 1px 2px #000; }
 @media (max-width: 760px) { #loading .logo { top: 5vh; } #loading .logo img { width: 92vw; } #loading .logo::after { -webkit-mask-size: 92vw auto; mask-size: 92vw auto; } }
 

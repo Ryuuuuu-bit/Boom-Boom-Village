@@ -13,6 +13,7 @@ out = {'images': {}, 'sheets': {}, 'wang': {}, 'sounds': {}}
 KEEP = {'crop_pumpkin_0_soil', 'crop_pumpkin_1_sprout', 'crop_pumpkin_2_growing'}
 for f in sorted(glob.glob(os.path.join(A, 'sprites', '*.png'))):
     k = os.path.basename(f)[:-4]
+    if k.startswith('crop_'): continue  # ภาพพืช pixel เก่า เลิกใช้แล้ว (ใช้ stg_*_4 แทน)
     im = Image.open(f).convert('RGBA')
     if k not in KEEP and not k.startswith('stg_') and k != 'soil_dry':
         bb = im.getbbox()
@@ -34,13 +35,18 @@ for f in sorted(glob.glob(os.path.join(A, 'hd', '*.png'))):
     if not keep:
         bb = im.getbbox()
         if bb: im = im.crop(bb)
-    if k in sizes: tw = sizes[k]
+    if k.startswith(('ic_', 'ui_')):  # ไอคอน: วางกลางผืนสี่เหลี่ยมจัตุรัส (เท่าไอคอนเดิม 32px แต่เก็บละเอียด)
+        side = max(im.size) + 8; sq = Image.new('RGBA', (side, side)); sq.alpha_composite(im, ((side - im.width) // 2, (side - im.height) // 2)); im = sq
+        tw = 32; mul = 3  # แสดง 32px ในฉาก (เก็บ 96px ให้คมในหน้าต่าง HTML)
+    else: mul = HD_MUL
+    if k.startswith(('ic_', 'ui_')): pass
+    elif k in sizes: tw = sizes[k]
     elif k in out['images']:
         old = Image.open(io.BytesIO(base64.b64decode(out['images'][k].split(',')[1]))); tw = old.width
     else: raise SystemExit('no size for hd image ' + k)
-    w = tw * HD_MUL; h = round(im.height * w / im.width)
+    w = tw * mul; h = round(im.height * w / im.width)
     im = im.resize((w, h), Image.LANCZOS)
-    out['images'][k] = uri(im); out['hd'][k] = HD_MUL
+    out['images'][k] = uri(im); out['hd'][k] = mul
 for f in sorted(glob.glob(os.path.join(A, 'ground', '*.png'))):
     out['images'][os.path.basename(f)[:-4]] = uri(Image.open(f).convert('RGBA'))
 # เสียง (mp3 ที่ย่อขนาดแล้ว)

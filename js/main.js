@@ -66,7 +66,7 @@ bindAuthUI();
 const fontsReady = document.fonts ? Promise.race([Promise.all(['500 12px "BBV Sans"', '600 12px "BBV Sans"', '700 12px "BBV Sans"'].map((f) => document.fonts.load(f, 'กขAa1'))), new Promise((r) => setTimeout(r, 2500))]) : Promise.resolve();
 let game = null;
 Promise.all([fontsReady.catch(() => {}), authReady]).then(() => { game = new Phaser.Game({
-  type: Phaser.AUTO, parent: 'game', backgroundColor: '#1a1816', pixelArt: true, roundPixels: true,
+  type: Phaser.AUTO, parent: 'game', backgroundColor: '#1a1816', pixelArt: false, antialias: true, roundPixels: false,
   scale: { mode: Phaser.Scale.RESIZE, width: window.innerWidth, height: window.innerHeight },
   scene: [World],
 }); });

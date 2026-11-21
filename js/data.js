@@ -68,14 +68,14 @@ const STORED_CATS = ['crop', 'animal', 'fruit', 'goods']; // นับรวม�
 
 // ---------- พืช (GDD 3.1) ----------
 const CROPS = {
-  millet:  { n: 'ข้าวฟ่าง', lv: 1, ms: 2 * MIN, seed: 2, yield: 2, xp: 1, img: 'crop_millet' },
-  pumpkin: { n: 'ฟักทอง', lv: 1, ms: 10 * MIN, seed: 5, yield: 1, xp: 3, img: 'crop_pumpkin_3_ripe' },
-  corn:    { n: 'ข้าวโพดป่า', lv: 3, ms: 30 * MIN, seed: 8, yield: 2, xp: 5, img: 'crop_corn', regrow: 2 },
-  taro:    { n: 'มันเผือกยักษ์', lv: 5, ms: 1 * HOUR, seed: 12, yield: 2, xp: 8, img: 'crop_taro' },
-  melon:   { n: 'แตงโมลายหิน', lv: 8, ms: 4 * HOUR, seed: 25, yield: 2, xp: 20, img: 'crop_watermelon' },
-  chili:   { n: 'พริกไฟ', lv: 11, ms: 2 * HOUR, seed: 20, yield: 3, xp: 14, img: 'crop_chili', regrow: 3 },
-  bean:    { n: 'ถั่วยักษ์', lv: 14, ms: 8 * HOUR, seed: 40, yield: 3, xp: 40, img: 'crop_bean', regrow: 3 },
-  rice:    { n: 'ข้าวเหนียวโบราณ', lv: 18, ms: 12 * HOUR, seed: 60, yield: 4, xp: 60, img: 'crop_rice' },
+  millet:  { n: 'ข้าวฟ่าง', lv: 1, ms: 2 * MIN, seed: 2, yield: 2, xp: 1, img: 'stg_millet_4' },
+  pumpkin: { n: 'ฟักทอง', lv: 1, ms: 10 * MIN, seed: 5, yield: 1, xp: 3, img: 'stg_pumpkin_4' },
+  corn:    { n: 'ข้าวโพดป่า', lv: 3, ms: 30 * MIN, seed: 8, yield: 2, xp: 5, img: 'stg_corn_4', regrow: 2 },
+  taro:    { n: 'มันเผือกยักษ์', lv: 5, ms: 1 * HOUR, seed: 12, yield: 2, xp: 8, img: 'stg_taro_4' },
+  melon:   { n: 'แตงโมลายหิน', lv: 8, ms: 4 * HOUR, seed: 25, yield: 2, xp: 20, img: 'stg_melon_4' },
+  chili:   { n: 'พริกไฟ', lv: 11, ms: 2 * HOUR, seed: 20, yield: 3, xp: 14, img: 'stg_chili_4', regrow: 3 },
+  bean:    { n: 'ถั่วยักษ์', lv: 14, ms: 8 * HOUR, seed: 40, yield: 3, xp: 40, img: 'stg_bean_4', regrow: 3 },
+  rice:    { n: 'ข้าวเหนียวโบราณ', lv: 18, ms: 12 * HOUR, seed: 60, yield: 4, xp: 60, img: 'stg_rice_4' },
 };
 const QUALITY = [{ n: 'ธรรมดา', star: '' }, { n: 'เกรดเงิน', star: '⭐', bonus: 0.25, xp: 1.5 }, { n: 'เกรดทอง', star: '🌟', bonus: 0.5, xp: 2 }];
 const PLOTS_BY_LEVEL = (lv) => Math.min(60, 6 + (lv - 1) * 3);

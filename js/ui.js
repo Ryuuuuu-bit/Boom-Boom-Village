@@ -239,7 +239,7 @@ PANELS.plot = (key) => {
 // --- ตลาด ---
 PANELS.market = (arg, P) => {
   const tab = P.tab || 'sell';
-  let html = `<div class="row" style="border:none"><img src="${A.images.npc_teng}" style="height:56px;image-rendering:pixelated"><div class="grow"><b>ลุงเท่ง พ่อค้าเร่:</b> ${weekendBuff() === 'market' ? 'สุดสัปดาห์นี้รับซื้อแพงขึ้น 20% นะหลานเอ๊ย!' : pick(['ของดีราคาถูก มาดูก่อนได้!', 'ขายของให้ลุงหน่อย ลุงจ่ายเป็นเปลือกหอยสวย ๆ', 'ระวังยุ้งฉางเต็มนะ ขายบ้างก็ดี'])}</div></div>`;
+  let html = `<div class="row" style="border:none"><img src="${A.images.npc_teng}" style="height:56px;image-rendering:auto"><div class="grow"><b>ลุงเท่ง พ่อค้าเร่:</b> ${weekendBuff() === 'market' ? 'สุดสัปดาห์นี้รับซื้อแพงขึ้น 20% นะหลานเอ๊ย!' : pick(['ของดีราคาถูก มาดูก่อนได้!', 'ขายของให้ลุงหน่อย ลุงจ่ายเป็นเปลือกหอยสวย ๆ', 'ระวังยุ้งฉางเต็มนะ ขายบ้างก็ดี'])}</div></div>`;
   html += tabsHTML([['sell', '💰 ขายของ'], ['seeds', '🌱 เมล็ดพันธุ์'], ['animals', '🐾 สัตว์'], ['mat', '🌲 วัสดุ'], ['amber', '🟠 แลกอำพัน']], tab);
   const acts = {};
   if (tab === 'sell') {
@@ -373,7 +373,7 @@ PANELS.bonfire = () => {
 PANELS.friends = () => {
   let html = '<p class="muted">ไปเยี่ยมหมู่บ้านเพื่อนเพื่อช่วยรดน้ำ ไล่หนอน ให้อาหารสัตว์ (ได้ขนนกทอง) หรือจะแกล้งก็ได้ แต่ระวังโดนแกล้งคืน! 😈</p>';
   for (const b of BOTS) { const bs = S.bots[b.id];
-    html += `<div class="row"><img src="${A.images[b.img]}" style="height:56px;image-rendering:pixelated"><div class="grow"><b>${b.e} ${b.n}</b> ${'★'.repeat(b.stars)}${bs.blocked ? ' <span class="muted">(บล็อกอยู่)</span>' : ''}<br><span class="muted">${b.d}</span><br>ช่วยได้อีก ${helpLeft(b)} · แกล้งได้อีก ${prankLeft(b)} · ${bs.giftDay === dayKey() ? 'รับของขวัญแล้ว' : '🎁 มีของขวัญรออยู่'}</div>
+    html += `<div class="row"><img src="${A.images[b.img]}" style="height:56px;image-rendering:auto"><div class="grow"><b>${b.e} ${b.n}</b> ${'★'.repeat(b.stars)}${bs.blocked ? ' <span class="muted">(บล็อกอยู่)</span>' : ''}<br><span class="muted">${b.d}</span><br>ช่วยได้อีก ${helpLeft(b)} · แกล้งได้อีก ${prankLeft(b)} · ${bs.giftDay === dayKey() ? 'รับของขวัญแล้ว' : '🎁 มีของขวัญรออยู่'}</div>
       <div style="display:flex;flex-direction:column;gap:4px"><button class="btn green" data-a="go" data-v="${b.id}">🚶 ไปเยี่ยม</button><button class="btn sm" data-a="block" data-v="${b.id}">${bs.blocked ? 'เลิกบล็อก' : '🚫 บล็อก'}</button></div></div>`; }
   html += `<p class="muted">วันนี้ช่วยไปแล้ว ${S.counters.helps}/${CFG.HELP_PER_DAY} · แกล้งไปแล้ว ${S.counters.pranks}/${prankQuota()} · โดนแกล้ง ${S.counters.pranked}/${CFG.BOT_PRANKS_TO_SHIELD} (ครบแล้วได้โล่ถึงเที่ยงคืน)</p>`;
   return { title: '👥 เพื่อนบ้าน', html, acts: {

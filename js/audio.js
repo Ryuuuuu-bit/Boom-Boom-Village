@@ -1,10 +1,10 @@
-/* Boom Boom Village — เสียงเอฟเฟกต์ (ไฟล์จริงจาก ElevenLabs) + ดนตรีประกอบที่แต่งด้วยโค้ด */
+/* Boom Boom Village — เสียงเอฟเฟกต์ + ดนตรีประกอบ (ไฟล์จริงจาก ElevenLabs) ; ถ้าโหลดเพลงไม่ได้จะใช้ดนตรีที่แต่งด้วยโค้ดแทน */
 'use strict';
 const AUDIO = { ctx: null, bufs: {}, sfxGain: null, musGain: null, music: null, ready: false };
 // ชื่อเสียงที่เกมเรียก -> ไฟล์เสียงจริง
 const SFX_MAP = {
-  quest: 'amber', chest: 'chest', plant: 'plant', water: 'water', pest: 'sweep', harvest: 'harvest', eat: 'dino', build: 'build',
-  coin: 'coin', clean: 'sweep', till: 'dig', ui: 'click', error: 'error', levelup: 'levelup', mud: 'mud', monkey: 'monkey',
+  quest: 'quest', chest: 'chest', plant: 'plant', water: 'water', pest: 'sweep', harvest: 'harvest', eat: 'dino', build: 'build',
+  coin: 'coin', clean: 'sweep', till: 'dig', ui: 'click', error: 'error_soft', levelup: 'levelup', mud: 'mud', monkey: 'monkey',
   rooster: 'rooster', goose: 'goose', boar: 'boar', boom: 'boom', amber: 'amber', dig: 'dig', dino: 'dino', sweep: 'sweep',
 };
 function audioInit() {
@@ -20,7 +20,64 @@ function audioInit() {
     ctx.decodeAudioData(u8.buffer).then((buf) => { AUDIO.bufs[k] = buf; }).catch(() => {});
   }
   AUDIO.ready = true;
-  musicStart();
+  bgmStart();
+}
+
+// ---------- เพลงประกอบจริง (ElevenLabs Music) ----------
+// ไฟล์อยู่ที่ assets/music/<ชื่อ>.mp3 ; กลางวัน/ไปบ้านเพื่อน = day, กลางคืน = night (ค่อย ๆ เฟดข้ามกัน)
+const BGM_FILES = { day: 'assets/music/day.mp3?v=1', night: 'assets/music/night.mp3?v=1' };
+const BGM_VOL = { day: 0.42, night: 0.4 };
+function bgmStart() {
+  if (AUDIO.bgm) return;
+  const c = AUDIO.ctx; const B = (AUDIO.bgm = { ok: false, tracks: {} });
+  AUDIO.musGain.gain.value = 1;
+  let pending = Object.keys(BGM_FILES).length; let anyOk = false;
+  const done = (ok) => { if (ok) { anyOk = true; B.ok = true; } if (--pending === 0 && !anyOk) musicStart(); };
+  for (const [k, url] of Object.entries(BGM_FILES)) {
+    const T = (B.tracks[k] = { ok: false, el: null, gain: c.createGain() });
+    T.gain.gain.value = 0; T.gain.connect(AUDIO.musGain);
+    const fallbackEl = () => { // เปิดจากไฟล์ (file://) fetch ใช้ไม่ได้ -> ใช้ <audio>
+      try {
+        const el = new Audio(url); el.loop = true; el.volume = 0; // ไม่ต่อเข้า WebAudio เพราะ file:// จะเงียบ ; คุมเสียงด้วย el.volume
+        el.addEventListener('canplaythrough', () => { if (!T.ok) { T.el = el; T.ok = true; done(true); } }, { once: true });
+        el.addEventListener('error', () => { if (!T.ok) done(false); }, { once: true });
+        el.load();
+      } catch (e) { done(false); }
+    };
+    fetch(url).then((r) => { if (!r.ok) throw 0; return r.arrayBuffer(); }).then((ab) => c.decodeAudioData(ab)).then((buf) => {
+      const src = c.createBufferSource(); src.buffer = buf; src.loop = true; src.connect(T.gain); src.start(); T.ok = true; done(true);
+    }).catch(fallbackEl);
+  }
+  setInterval(bgmTick, 250);
+}
+function bgmTick() {
+  const c = AUDIO.ctx; const B = AUDIO.bgm; if (!c || !B) return;
+  const on = S && S.settings.music && !document.hidden;
+  if (B.ok) {
+    const mood = musicMood(); const want = mood === 'night' && B.tracks.night.ok ? 'night' : 'day';
+    for (const [k, T] of Object.entries(B.tracks)) {
+      if (!T.ok) continue; const v = on && k === want ? BGM_VOL[k] : 0;
+      if (T.el) { // โหมดเปิดจากไฟล์
+        const ev = Math.max(0, Math.min(1, T.el.volume + (v - T.el.volume) * 0.15));
+        T.el.volume = ev < 0.005 ? 0 : ev;
+        if (v > 0 && T.el.paused) T.el.play().catch(() => {}); else if (v === 0 && T.el.volume === 0 && !T.el.paused) T.el.pause();
+      } else T.gain.gain.setTargetAtTime(v, c.currentTime, 1.2);
+    }
+  }
+  // เสียงฝนวนลูป ตอนฝนตกในหมู่บ้านเรา
+  const t = performance.now(); if (t - rainChk < 1000) return; rainChk = t;
+  const wantRain = !!(S && S.settings.sfx && !document.hidden && typeof rainNow === 'function' && rainNow() && musicMood() !== 'friend');
+  ambRain(wantRain);
+}
+let rainChk = 0;
+function ambRain(on) {
+  const c = AUDIO.ctx; const buf = AUDIO.bufs.rain;
+  if (on && !AUDIO.rain && buf) {
+    const s = c.createBufferSource(); s.buffer = buf; s.loop = true; const g = c.createGain(); g.gain.value = 0;
+    s.connect(g).connect(AUDIO.sfxGain); s.start(); g.gain.setTargetAtTime(0.5, c.currentTime, 1.2); AUDIO.rain = { s, g };
+  } else if (!on && AUDIO.rain) {
+    const R = AUDIO.rain; AUDIO.rain = null; R.g.gain.setTargetAtTime(0, c.currentTime, 0.8); setTimeout(() => { try { R.s.stop(); } catch (e) {} }, 4000);
+  }
 }
 const lastPlay = {};
 function sfx(name, vol = 1) {
@@ -74,6 +131,7 @@ function musicStart() {
   setInterval(() => {
     const c = AUDIO.ctx; if (!c) return;
     const on = S && S.settings.music && !document.hidden;
+    if (AUDIO.bgm && AUDIO.bgm.ok) { AUDIO.musGain.gain.value = 1; return; } // มีเพลงจริงแล้ว ไม่ต้องเล่นดนตรีโค้ด
     AUDIO.musGain.gain.setTargetAtTime(on ? 0.16 : 0, c.currentTime, 0.4);
     if (!on) { M.next = c.currentTime + 0.1; return; }
     const md = MOODS[M.mood]; const sp = 60 / md.bpm / 2; // 8th notes

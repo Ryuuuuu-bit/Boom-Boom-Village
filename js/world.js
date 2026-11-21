@@ -153,6 +153,7 @@ class World extends Phaser.Scene {
   setCell(x, y, v) { if (!this.cell(x, y)) return; this.grid[y][x] = v; for (let j = y - 1; j <= y + 1; j++) for (let i = x - 1; i <= x + 1; i++) if (this.cell(i, j)) this.paintTile(i, j); this.scatterAt(x, y); if (this.groundTex) this.bakeGround(x - 2, y - 2, x + 2, y + 2); }
   // ===== พื้นแบบอบภาพ: รวมกระเบื้องเป็นภาพเดียว แล้วเติมใบหญ้า ขอบทาง เงา ก้อนกรวด ทีละพิกเซล =====
   bakeGround(x0, y0, x1, y1) {
+    if (A.images.gt_grass) return this.bakeGroundHD(x0, y0, x1, y1);
     const W = this.W * T, H = this.H * T;
     if (!this.groundTex) {
       this.groundTex = this.textures.exists('ground_' + this.loc) ? this.textures.get('ground_' + this.loc) : this.textures.createCanvas('ground_' + this.loc, W, H);
@@ -205,6 +206,70 @@ class World extends Phaser.Scene {
         if (h < (edge ? 0.22 : 0.012)) blade(x, y, edge ? 3 : 2 + (H2(x, y, 8) < 0.5 ? 1 : 0));
       } else if (c === 1 && H2(x, y, 9) < 0.0022 && C(x + 1, y) === 1 && C(x, y + 1) === 1 && C(x + 2, y) === 1 && C(x, y - 2) === 1 && C(x, y + 3) === 1) {
         const i = y * pw + x; set(i, 214, 200, 176); set(i + 1, 190, 174, 150); set(i + pw, 150, 128, 104); set(i + pw + 1, 120, 98, 76);
+      }
+    }
+    ctx.putImageData(id, px0, py0); this.groundTex.refresh();
+  }
+  // ===== พื้นแบบ chibi: ภาพวาดเนียน (หญ้า ทางดิน ดินแปลง น้ำ) ความละเอียด 2 เท่า ขอบโค้งมนมีเส้นขอบ =====
+  bakeGroundHD(x0, y0, x1, y1) {
+    const R = 2, TT = T * R;
+    if (!this.groundTex) {
+      const key = 'groundhd_' + this.loc;
+      this.groundTex = this.textures.exists(key) ? this.textures.get(key) : this.textures.createCanvas(key, this.W * TT, this.H * TT);
+      this.groundTex.setFilter(Phaser.Textures.FilterMode.LINEAR);
+      this.groundImg = this.add.image(0, 0, key).setOrigin(0).setDepth(0.4).setScale(1 / R);
+      for (const row of this.tiles) for (const t of row) t.setVisible(false);
+    }
+    if (!World.GT) {
+      World.GT = {};
+      for (const n of ['grass', 'dirt', 'soil', 'water']) {
+        const im = this.textures.get('gt_' + n).getSourceImage(), c = document.createElement('canvas'); c.width = im.width; c.height = im.height;
+        const cx = c.getContext('2d'); cx.drawImage(im, 0, 0); World.GT[n] = { d: cx.getImageData(0, 0, c.width, c.height).data, w: c.width, h: c.height };
+      }
+    }
+    const GT = World.GT;
+    x0 = Math.max(0, x0); y0 = Math.max(0, y0); x1 = Math.min(this.W - 1, x1); y1 = Math.min(this.H - 1, y1);
+    const ctx = this.groundTex.getContext(), px0 = x0 * TT, py0 = y0 * TT, pw = (x1 - x0 + 1) * TT, ph = (y1 - y0 + 1) * TT;
+    const id = ctx.createImageData(pw, ph), d = id.data;
+    // ค่ามุมของแต่ละจุดตัดกริด (ทางดิน/น้ำ) สำหรับผสมแบบโค้งมน
+    const cw = x1 - x0 + 3, ch = y1 - y0 + 3, cor = {};
+    for (const t of ['d', 'w']) { const a = (cor[t] = new Float32Array(cw * ch)); for (let j = 0; j < ch; j++) for (let i = 0; i < cw; i++) a[j * cw + i] = this.corner(x0 + i, y0 + j) === t ? 1 : 0; }
+    const vn = (x, y, sc, sd) => { // value noise
+      const gx = x / sc, gy = y / sc, ix = Math.floor(gx), iy = Math.floor(gy), fx = gx - ix, fy = gy - iy;
+      const a = hsh(ix, iy, sd), b = hsh(ix + 1, iy, sd), c = hsh(ix, iy + 1, sd), e = hsh(ix + 1, iy + 1, sd);
+      const sx = fx * fx * (3 - 2 * fx), sy = fy * fy * (3 - 2 * fy); return (a * (1 - sx) + b * sx) * (1 - sy) + (c * (1 - sx) + e * sx) * sy;
+    };
+    const isS = (x, y) => this.cell(x, y) === 's';
+    const RAD = 18, INS = 3;
+    for (let y = 0; y < ph; y++) {
+      const wy = py0 + y, cy = Math.floor(wy / TT), fy = wy / TT - cy, ly = wy - cy * TT;
+      for (let x = 0; x < pw; x++) {
+        const wx = px0 + x, cx = Math.floor(wx / TT), fx = wx / TT - cx, lx = wx - cx * TT;
+        const i0 = (cy - y0) * cw + (cx - x0);
+        const n = (vn(wx, wy, 26, 31) - 0.5) * 0.34 + (vn(wx, wy, 9, 37) - 0.5) * 0.12;
+        let best = 'grass', edge = 1;
+        for (const t of ['d', 'w']) {
+          const a = cor[t], v = (a[i0] * (1 - fx) + a[i0 + 1] * fx) * (1 - fy) + (a[i0 + cw] * (1 - fx) + a[i0 + cw + 1] * fx) * fy;
+          const m = v + n - 0.5;
+          if (m > 0) { best = t === 'd' ? 'dirt' : 'water'; edge = m; }
+          else if (best === 'grass' && m > -0.05) edge = Math.min(edge, -m + 1); // หญ้าริมขอบ
+        }
+        // ดินแปลง: สี่เหลี่ยมมุมมน เชื่อมกับแปลงข้าง ๆ
+        let soilD = -1;
+        if (isS(cx, cy)) {
+          const dl = isS(cx - 1, cy) ? 99 : lx - INS, dr = isS(cx + 1, cy) ? 99 : TT - 1 - INS - lx, dt = isS(cx, cy - 1) ? 99 : ly - INS, db = isS(cx, cy + 1) ? 99 : TT - 1 - INS - ly;
+          const dx = Math.min(dl, dr), dy = Math.min(dt, db);
+          soilD = dx < RAD && dy < RAD ? RAD - Math.hypot(RAD - dx, RAD - dy) : Math.min(dx, dy);
+        }
+        let tex = best, k = 1;
+        if (soilD >= 0) tex = 'soil';
+        const g = GT[tex], ti = ((wy % g.h) * g.w + (wx % g.w)) * 4, o = (y * pw + x) * 4;
+        let r = g.d[ti], gg = g.d[ti + 1], b = g.d[ti + 2];
+        if (tex === 'grass') { r = r * 0.66 + 34; gg = gg * 0.74 + 30; b = b * 0.6 + 34; const sh = vn(wx, wy, 60, 41); k = 0.92 + sh * 0.14; if (edge < 1.05 && edge > 1) k *= 1.12; }
+        else if (tex === 'soil') { if (soilD < 2) { r = 74; gg = 42; b = 22; } else if (soilD < 5) k = 1.18; else if (ly < INS + 9 && !isS(cx, cy - 1)) k = 0.88; }
+        else if (tex === 'dirt') { r = r * 0.72 + 58; gg = gg * 0.78 + 46; b = b * 0.7 + 52; if (edge < 0.035) { r = 122; gg = 78; b = 40; } else if (edge < 0.08) k = 0.9; }
+        else if (tex === 'water') { if (edge < 0.03) { r = 236; gg = 252; b = 248; } else if (edge < 0.07) { r = r * 0.8 + 40; gg = gg * 0.8 + 50; b = b * 0.8 + 50; } else k = 0.95 - Math.min(0.15, edge * 0.2); }
+        d[o] = r * k; d[o + 1] = gg * k; d[o + 2] = b * k; d[o + 3] = 255;
       }
     }
     ctx.putImageData(id, px0, py0); this.groundTex.refresh();

@@ -41,6 +41,8 @@ for f in sorted(glob.glob(os.path.join(A, 'hd', '*.png'))):
     w = tw * HD_MUL; h = round(im.height * w / im.width)
     im = im.resize((w, h), Image.LANCZOS)
     out['images'][k] = uri(im); out['hd'][k] = HD_MUL
+for f in sorted(glob.glob(os.path.join(A, 'ground', '*.png'))):
+    out['images'][os.path.basename(f)[:-4]] = uri(Image.open(f).convert('RGBA'))
 # เสียง (mp3 ที่ย่อขนาดแล้ว)
 for f in sorted(glob.glob(os.path.join(A, 'sfx', '*.mp3'))):
     out['sounds'][os.path.basename(f)[:-4]] = 'data:audio/mpeg;base64,' + base64.b64encode(open(f, 'rb').read()).decode()

@@ -248,10 +248,10 @@ class World extends Phaser.Scene {
         const wx = px0 + x, cx = Math.floor(wx / TT), fx = wx / TT - cx, lx = wx - cx * TT;
         const i0 = (cy - y0) * cw + (cx - x0);
         const n = (vn(wx, wy, 26, 31) - 0.5) * 0.34 + (vn(wx, wy, 9, 37) - 0.5) * 0.12;
-        let best = 'grass', edge = 1;
+        let best = 'grass', edge = 1, mD = -1;
         for (const t of ['d', 'w']) {
           const a = cor[t], v = (a[i0] * (1 - fx) + a[i0 + 1] * fx) * (1 - fy) + (a[i0 + cw] * (1 - fx) + a[i0 + cw + 1] * fx) * fy;
-          const m = v + n - 0.5;
+          const m = v + n - 0.5; if (t === 'd') mD = m;
           if (m > 0) { best = t === 'd' ? 'dirt' : 'water'; edge = m; }
           else if (best === 'grass' && m > -0.05) edge = Math.min(edge, -m + 1); // หญ้าริมขอบ
         }
@@ -266,9 +266,10 @@ class World extends Phaser.Scene {
         if (soilD >= 0) tex = 'soil';
         const g = GT[tex], ti = ((wy % g.h) * g.w + (wx % g.w)) * 4, o = (y * pw + x) * 4;
         let r = g.d[ti], gg = g.d[ti + 1], b = g.d[ti + 2];
-        if (tex === 'grass') { r = r * 0.66 + 34; gg = gg * 0.74 + 30; b = b * 0.6 + 34; const sh = vn(wx, wy, 60, 41); k = 0.92 + sh * 0.14; if (edge < 1.05 && edge > 1) k *= 1.12; }
+        if (tex === 'grass') { r = r * 0.66 + 34; gg = gg * 0.74 + 30; b = b * 0.6 + 34; const sh = vn(wx, wy, 60, 41); k = 0.92 + sh * 0.14; if (edge < 1.05 && edge > 1) k *= 1.12;
+          if (mD > -0.012) { const a2 = (mD + 0.012) / 0.012; r = (r * k) * (1 - a2) + 122 * a2; gg = (gg * k) * (1 - a2) + 78 * a2; b = (b * k) * (1 - a2) + 40 * a2; k = 1; } } // ขอบนุ่ม
         else if (tex === 'soil') { if (soilD < 2) { r = 74; gg = 42; b = 22; } else if (soilD < 5) k = 1.18; else if (ly < INS + 9 && !isS(cx, cy - 1)) k = 0.88; }
-        else if (tex === 'dirt') { r = r * 0.72 + 58; gg = gg * 0.78 + 46; b = b * 0.7 + 52; if (edge < 0.035) { r = 122; gg = 78; b = 40; } else if (edge < 0.08) k = 0.9; }
+        else if (tex === 'dirt') { r = r * 0.72 + 58; gg = gg * 0.78 + 46; b = b * 0.7 + 52; if (edge < 0.035) { r = 122; gg = 78; b = 40; } else if (edge < 0.047) { const a3 = (edge - 0.035) / 0.012; r = 122 * (1 - a3) + r * 0.9 * a3; gg = 78 * (1 - a3) + gg * 0.9 * a3; b = 40 * (1 - a3) + b * 0.9 * a3; } else if (edge < 0.08) k = 0.9; }
         else if (tex === 'water') { if (edge < 0.03) { r = 236; gg = 252; b = 248; } else if (edge < 0.07) { r = r * 0.8 + 40; gg = gg * 0.8 + 50; b = b * 0.8 + 50; } else k = 0.95 - Math.min(0.15, edge * 0.2); }
         d[o] = r * k; d[o + 1] = gg * k; d[o + 2] = b * k; d[o + 3] = 255;
       }
@@ -706,9 +707,12 @@ class World extends Phaser.Scene {
     const huts = S.objects.filter((o) => o.type === 'hut').slice(0, CFG.MAX_VILLAGERS);
     const tints = [0xffd8b0, 0xd0f0c0, 0xc8d8ff, 0xffc8d8, 0xf0e0a0];
     huts.forEach((h, i) => {
-      const spr = this.add.sprite((h.x + 1.5) * T, (h.y + 2.6) * T, 'villager', 30).setOrigin(0.5, 46 / 48).setTint(tints[i % tints.length]).setScale(0.85);
-      spr.play('idle-south');
-      this.ents.push({ kind: 'villager', spr, home: h, tx: spr.x, ty: spr.y, wait: rnd(1, 4), dir: 'south' });
+      const tex = this.textures.exists('vil_vm') ? (i % 2 ? 'vil_vw' : 'vil_vm') : 'villager';
+      const pre = tex === 'villager' ? '' : tex + '-';
+      const spr = this.add.sprite((h.x + 1.5) * T, (h.y + 2.6) * T, tex, 30).setOrigin(0.5, 46 / 48).setScale(0.85);
+      if (!pre) spr.setTint(tints[i % tints.length]);
+      spr.play(pre + 'idle-south');
+      this.ents.push({ kind: 'villager', spr, home: h, tx: spr.x, ty: spr.y, wait: rnd(1, 4), dir: 'south', pre });
     });
   }
 
@@ -726,7 +730,7 @@ class World extends Phaser.Scene {
     const objById = (id) => (this.home ? S.objects.find((o) => o.id === id) : this.fobjs.find((o) => o.id === id));
     if (p.kind === 'mud' || p.kind === 'leaves') {
       for (const c of p.cells || []) {
-        const s = this.add.image((c[0] + 0.5) * T, (c[1] + 0.5) * T, p.kind === 'mud' ? 'prank_mud' : 'prank_leaves').setDepth(3).setAngle(rint(0, 3) * 90);
+        const s = this.add.image((c[0] + 0.5) * T, (c[1] + 0.5) * T, p.kind === 'mud' ? 'prank_mud' : 'prank_leaves').setDepth(3).setFlipX(Math.random() < 0.5);
         reg(s, c);
       }
     } else if (p.kind === 'sticker') {
@@ -1128,6 +1132,7 @@ class World extends Phaser.Scene {
     for (const [a, dirs] of Object.entries(rows)) for (const [d, r] of Object.entries(dirs)) {
       const n = a === 'idle' ? 4 : 6;
       this.anims.create({ key: `${a}-${d}`, frames: this.anims.generateFrameNumbers('villager', { start: r * 6, end: r * 6 + n - 1 }), frameRate: a === 'idle' ? 5 : 10, repeat: -1 });
+      for (const t of ['vil_vm', 'vil_vw']) if (this.textures.exists(t)) this.anims.create({ key: `${t}-${a}-${d}`, frames: this.anims.generateFrameNumbers(t, { start: r * 6, end: r * 6 + n - 1 }), frameRate: a === 'idle' ? 5 : 10, repeat: -1 });
     }
   }
 
@@ -1169,7 +1174,7 @@ class World extends Phaser.Scene {
       const dx = e.tx - e.spr.x, dy = e.ty - e.spr.y, d = Math.hypot(dx, dy);
       const sp = e.kind === 'boar' ? 70 : e.kind === 'villager' ? 30 : 18;
       if (d > 1.5) { e.spr.x += (dx / d) * Math.min(d, sp * dt); e.spr.y += (dy / d) * Math.min(d, sp * dt); if (e.kind !== 'villager' && Math.abs(dx) > 1) e.spr.setFlipX(dx > 0); }
-      if (e.kind === 'villager') { const dir = d > 1.5 ? (Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'east' : 'west') : dy > 0 ? 'south' : 'north') : e.dir; e.dir = dir; e.spr.play((d > 1.5 ? 'walk-' : 'idle-') + dir, true); }
+      if (e.kind === 'villager') { const dir = d > 1.5 ? (Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'east' : 'west') : dy > 0 ? 'south' : 'north') : e.dir; e.dir = dir; e.spr.play((e.pre || '') + (d > 1.5 ? 'walk-' : 'idle-') + dir, true); }
       e.spr.setDepth(e.spr.y);
       if (!e.sh) e.sh = this.add.ellipse(0, 0, Math.min(22, e.spr.displayWidth * 0.7), 5, 0x10200a, 0.25).setDepth(2);
       e.sh.setPosition(e.spr.x, e.spr.y - 1).setVisible(e.spr.visible);

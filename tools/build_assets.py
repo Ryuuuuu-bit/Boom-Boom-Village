@@ -63,12 +63,11 @@ for r in range(src.height // 48):
         sheet.alpha_composite(cell, (c * 48, r * 48 + (46 - bb[3])))
 out['sheets']['villager'] = {'uri': uri(sheet), 'w': 48, 'h': 48}
 # ตัวละคร chibi: สร้างสไปรต์ชีตเลย์เอาต์เดียวกับ villager (แถวละ 6 เฟรม) จากภาพนิ่ง 4 ทิศ + ขยับเด้งเป็นท่าเดิน/หายใจ
-if os.path.exists(os.path.join(A, 'hd', 'ch_south.png')):
-    import math
-    FW = 96; CH_H = 84  # เฟรม 96x96 (แสดง 48x48), ตัวสูง ~42px บนจอ
+import math
+def chibi_sheet(files, CH_H=84, FW=96):
     poses = {}
-    for d in ['south', 'west', 'east', 'north']:
-        im = Image.open(os.path.join(A, 'hd', 'ch_%s.png' % d)).convert('RGBA'); im = im.crop(im.getbbox())
+    for d, fn in files.items():
+        im = Image.open(os.path.join(A, 'hd', fn)).convert('RGBA'); im = im.crop(im.getbbox())
         poses[d] = im.resize((round(im.width * CH_H / im.height), CH_H), Image.LANCZOS)
     rows = {1: 'south', 2: 'west', 3: 'east', 4: 'north', 5: 'south', 6: 'west', 7: 'east', 8: 'north'}
     hd = Image.new('RGBA', (FW * 6, FW * 9))
@@ -81,9 +80,14 @@ if os.path.exists(os.path.join(A, 'hd', 'ch_south.png')):
                 ph = c / 6 * 2 * math.pi; bob = -abs(math.sin(ph)) * 6; sy = 1 - 0.03 * abs(math.cos(ph)); sx = 1; rot = 4 * math.sin(ph) if d in ('south', 'north') else 2.5 * math.sin(ph)
             fr = im.resize((round(im.width * sx), round(im.height * sy)), Image.LANCZOS)
             if rot: fr = fr.rotate(rot, resample=Image.BICUBIC, expand=True)
-            x = c * FW + (FW - fr.width) // 2; y = r * FW + 92 - fr.height + round(bob)
-            hd.alpha_composite(fr, (x, y))
-    out['sheets']['villager'] = {'uri': uri(hd), 'w': FW, 'h': FW, 'hd': 2}
+            hd.alpha_composite(fr, (c * FW + (FW - fr.width) // 2, r * FW + 92 - fr.height + round(bob)))
+    return {'uri': uri(hd), 'w': FW, 'h': FW, 'hd': 2}
+# ตัวละคร chibi: สไปรต์ชีตเลย์เอาต์เดียวกับ villager (แถวละ 6 เฟรม) จากภาพนิ่ง + ขยับเด้งเป็นท่าเดิน/หายใจ
+if os.path.exists(os.path.join(A, 'hd', 'ch_south.png')):
+    out['sheets']['villager'] = chibi_sheet({d: 'ch_%s.png' % d for d in ['south', 'west', 'east', 'north']})
+for v in ['vm', 'vw']:  # ชาวบ้านชาย/หญิง (มีแค่ท่าหน้าตรง ใช้ทุกทิศ)
+    if os.path.exists(os.path.join(A, 'hd', 'ch_%s.png' % v)):
+        out['sheets']['vil_' + v] = chibi_sheet({d: 'ch_%s.png' % v for d in ['south', 'west', 'east', 'north']}, CH_H=78)
 for n in ['dirt', 'soil', 'water']:
     out['sheets']['ts_' + n] = {'uri': uri(Image.open(os.path.join(A, 'tileset_grass_%s.png' % n)).convert('RGBA')), 'w': 32, 'h': 32}
     d = json.load(open(os.path.join(A, 'tileset_grass_%s.json' % n)))

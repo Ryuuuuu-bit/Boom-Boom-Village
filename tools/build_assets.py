@@ -20,6 +20,27 @@ for f in sorted(glob.glob(os.path.join(A, 'sprites', '*.png'))):
     out['images'][k] = uri(im)
 for f in sorted(glob.glob(os.path.join(A, 'icons', '*.png'))):
     out['images'][os.path.basename(f)[:-4]] = uri(Image.open(f).convert('RGBA'))
+# ภาพ chibi ความละเอียดสูง (assets/hd/<key>.png) แทนภาพเดิมชื่อเดียวกัน
+# แสดงขนาดเท่าภาพเดิม (หรือกว้างตาม hd/sizes.json) แต่เก็บภาพจริงไว้ HD_MUL เท่า
+HD_MUL = 2
+out['hd'] = {}
+sizes = {}
+if os.path.exists(os.path.join(A, 'hd', 'sizes.json')): sizes = json.load(open(os.path.join(A, 'hd', 'sizes.json')))
+for f in sorted(glob.glob(os.path.join(A, 'hd', '*.png'))):
+    k = os.path.basename(f)[:-4]
+    if k.endswith('_sheet'): continue
+    im = Image.open(f).convert('RGBA')
+    keep = k.startswith('stg_') or k in KEEP or k == 'soil_dry'
+    if not keep:
+        bb = im.getbbox()
+        if bb: im = im.crop(bb)
+    if k in sizes: tw = sizes[k]
+    elif k in out['images']:
+        old = Image.open(io.BytesIO(base64.b64decode(out['images'][k].split(',')[1]))); tw = old.width
+    else: raise SystemExit('no size for hd image ' + k)
+    w = tw * HD_MUL; h = round(im.height * w / im.width)
+    im = im.resize((w, h), Image.LANCZOS)
+    out['images'][k] = uri(im); out['hd'][k] = HD_MUL
 # เสียง (mp3 ที่ย่อขนาดแล้ว)
 for f in sorted(glob.glob(os.path.join(A, 'sfx', '*.mp3'))):
     out['sounds'][os.path.basename(f)[:-4]] = 'data:audio/mpeg;base64,' + base64.b64encode(open(f, 'rb').read()).decode()

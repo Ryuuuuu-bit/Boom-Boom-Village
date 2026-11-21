@@ -24,6 +24,24 @@ function friendLayout(b) {
   return objs;
 }
 
+// ภาพความละเอียดสูง (แบบ chibi): ย่อ "ขนาดเฟรม" ให้เท่าภาพเดิม แต่ยังวาดจากภาพจริงทั้งภาพ
+// โค้ดเกมจึงเห็นขนาดเท่าเดิมทุกอย่าง แต่บนจอได้ภาพคมชัด
+function applyHD(scene) {
+  const HD = A.hd || {};
+  for (const [key, k] of Object.entries(HD)) {
+    if (!scene.textures.exists(key)) continue;
+    const tex = scene.textures.get(key);
+    if (tex._hd) continue; tex._hd = k;
+    tex.setFilter(Phaser.Textures.FilterMode.LINEAR);
+    for (const name of tex.getFrameNames(true)) {
+      const f = tex.get(name);
+      const uv = [f.u0, f.v0, f.u1, f.v1];
+      f.setSize(f.cutWidth / k, f.cutHeight / k, f.cutX / k, f.cutY / k);
+      f.u0 = uv[0]; f.v0 = uv[1]; f.u1 = uv[2]; f.v1 = uv[3];
+    }
+  }
+}
+
 class World extends Phaser.Scene {
   constructor() { super('World'); }
   init(data) { this.loc = (data && data.loc) || 'home'; }
@@ -34,7 +52,7 @@ class World extends Phaser.Scene {
     this.load.on('progress', (v) => { const el = document.getElementById('load-bar'); if (el) el.style.width = Math.round(v * 100) + '%'; });
   }
   create() {
-    SCENE = this;
+    SCENE = this; applyHD(this);
     this.home = this.loc === 'home';
     this.bot = this.home ? null : botById(this.loc);
     this.W = this.home ? CFG.MAP_W : FRIEND_W; this.H = this.home ? CFG.MAP_H : FRIEND_H;

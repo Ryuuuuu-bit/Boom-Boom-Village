@@ -27,6 +27,26 @@ function audioInit() {
 // ไฟล์อยู่ที่ assets/music/<ชื่อ>.mp3 ; กลางวัน/ไปบ้านเพื่อน = day, กลางคืน = night (ค่อย ๆ เฟดข้ามกัน)
 const BGM_FILES = { day: 'assets/music/day.mp3?v=1', night: 'assets/music/night.mp3?v=1' };
 const BGM_VOL = { day: 0.42, night: 0.4 };
+// หน้าแรก (ยังไม่มีเซฟ) ใช้ค่า titleOn ; เข้าเกมแล้วใช้ปุ่มในหน้าตั้งค่า
+AUDIO.titleOn = (() => { try { return localStorage.getItem('bbv_title_music') !== '0'; } catch (e) { return true; } })();
+function bgmWanted() { return (S ? S.settings.music : AUDIO.titleOn) && !document.hidden; }
+// ปุ่มเปิด/ปิดเพลงที่หน้าแรก + เริ่มเพลงทันทีที่ผู้เล่นแตะหน้าจอครั้งแรก (เบราว์เซอร์ไม่ให้เล่นเสียงก่อนแตะ)
+function titleSndLabel() {
+  const b = document.getElementById('snd-btn'); if (!b) return;
+  b.textContent = !AUDIO.ctx ? (AUDIO.titleOn ? '🔊 แตะเพื่อเปิดเพลง' : '🔇 เพลงปิดอยู่') : AUDIO.titleOn ? '🔊 เพลงเปิดอยู่' : '🔇 เพลงปิดอยู่';
+}
+window.addEventListener('DOMContentLoaded', () => {
+  const L = document.getElementById('loading'); const b = document.getElementById('snd-btn'); if (!L || !b) return;
+  titleSndLabel();
+  b.addEventListener('click', (e) => {
+    e.stopPropagation();
+    AUDIO.titleOn = !AUDIO.ctx ? true : !AUDIO.titleOn;
+    try { localStorage.setItem('bbv_title_music', AUDIO.titleOn ? '1' : '0'); } catch (err) {}
+    if (S) { S.settings.music = AUDIO.titleOn; }
+    audioInit(); titleSndLabel();
+  });
+  L.addEventListener('pointerdown', () => { if (AUDIO.titleOn && !AUDIO.ctx) { audioInit(); titleSndLabel(); } }, true);
+});
 function bgmStart() {
   if (AUDIO.bgm) return;
   const c = AUDIO.ctx; const B = (AUDIO.bgm = { ok: false, tracks: {} });
@@ -52,7 +72,7 @@ function bgmStart() {
 }
 function bgmTick() {
   const c = AUDIO.ctx; const B = AUDIO.bgm; if (!c || !B) return;
-  const on = S && S.settings.music && !document.hidden;
+  const on = bgmWanted();
   if (B.ok) {
     const mood = musicMood(); const want = mood === 'night' && B.tracks.night.ok ? 'night' : 'day';
     for (const [k, T] of Object.entries(B.tracks)) {

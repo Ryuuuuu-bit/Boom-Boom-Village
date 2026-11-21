@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
 <title>Boom Boom Village</title>
-<link rel="stylesheet" href="fonts.css?v=8">
-<link rel="stylesheet" href="style.css?v=8">
+<link rel="stylesheet" href="fonts.css?v=9">
+<link rel="stylesheet" href="style.css?v=9">
 </head>
 <body>
 <div id="game"></div>
@@ -120,10 +120,13 @@
 
 <!-- หน้าต่าง -->
 <div id="modal" class="hidden">
-  <div class="box" id="m-box">
+  <div class="mwrap">
+    <div class="box" id="m-box">
+      <div id="m-body"></div>
+    </div>
+    <div class="m-zz"></div>
+    <div class="m-head"><i class="orn"></i><img id="m-ic" class="hidden"><h2 id="m-title"></h2><i class="orn"></i></div>
     <button class="close" id="m-close"><img data-ic="ui_close"></button>
-    <div class="m-head"><img id="m-ic" class="hidden"><h2 id="m-title"></h2></div>
-    <div id="m-body"></div>
   </div>
 </div>
 
@@ -136,14 +139,14 @@
 <div id="confetti"></div>
 
 <script src="lib/phaser.min.js"></script>
-<script src="assets.js?v=8"></script>
-<script src="js/data.js?v=8"></script>
-<script src="js/state.js?v=8"></script>
-<script src="js/bots.js?v=8"></script>
-<script src="js/audio.js?v=8"></script>
-<script src="js/world.js?v=8"></script>
-<script src="js/ui.js?v=8"></script>
-<script src="js/auth.js?v=8"></script>
-<script src="js/main.js?v=8"></script>
+<script src="assets.js?v=9"></script>
+<script src="js/data.js?v=9"></script>
+<script src="js/state.js?v=9"></script>
+<script src="js/bots.js?v=9"></script>
+<script src="js/audio.js?v=9"></script>
+<script src="js/world.js?v=9"></script>
+<script src="js/ui.js?v=9"></script>
+<script src="js/auth.js?v=9"></script>
+<script src="js/main.js?v=9"></script>
 </body>
 </html>
